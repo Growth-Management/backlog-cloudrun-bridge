@@ -12,7 +12,7 @@ export CLOUD_RUN_SERVICE="backlog-cloudrun-bridge"
 export ARTIFACT_REGISTRY_REPOSITORY="backlog-cloudrun"
 export GITHUB_OWNER="Growth-Management"
 export GITHUB_REPO="backlog-cloudrun-bridge"
-export DEPLOY_SERVICE_ACCOUNT="github-actions-cloud-run-deployer"
+export DEPLOY_SERVICE_ACCOUNT="gha-run-deployer"
 export RUNTIME_SERVICE_ACCOUNT="backlog-cloudrun-runtime"
 export WORKLOAD_IDENTITY_POOL="github-actions"
 export WORKLOAD_IDENTITY_PROVIDER="github-actions-provider"
@@ -142,7 +142,7 @@ GCP_PROJECT_ID=sysmgmt-cloudrun-bridge
 GCP_REGION=asia-northeast1
 CLOUD_RUN_SERVICE=backlog-cloudrun-bridge
 ARTIFACT_REGISTRY_REPOSITORY=backlog-cloudrun
-GCP_DEPLOY_SERVICE_ACCOUNT=github-actions-cloud-run-deployer@sysmgmt-cloudrun-bridge.iam.gserviceaccount.com
+GCP_DEPLOY_SERVICE_ACCOUNT=gha-run-deployer@sysmgmt-cloudrun-bridge.iam.gserviceaccount.com
 CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT=backlog-cloudrun-runtime@sysmgmt-cloudrun-bridge.iam.gserviceaccount.com
 GCP_WORKLOAD_IDENTITY_PROVIDER=projects/657902475140/locations/global/workloadIdentityPools/github-actions/providers/github-actions-provider
 ```
