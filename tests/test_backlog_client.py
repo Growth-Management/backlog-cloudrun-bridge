@@ -98,6 +98,54 @@ def test_client_converts_invalid_json_response() -> None:
     assert exc_info.value.error_code == "backlog_invalid_response"
 
 
+def test_client_creates_issue_with_form_data() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.url.params["apiKey"] == "backlog-key"
+        if request.url.path == "/api/v2/projects/ICESAO_GENTASK":
+            return httpx.Response(200, json={"id": 123})
+        if request.url.path == "/api/v2/issues":
+            form_body = request.content.decode()
+            assert "projectId=123" in form_body
+            assert "summary=Example" in form_body
+            assert "issueTypeId=5" in form_body
+            assert "priorityId=3" in form_body
+            assert "assigneeId=10" in form_body
+            return httpx.Response(
+                201,
+                json={
+                    "issueKey": "ICESAO_GENTASK-1",
+                    "summary": "Example",
+                    "status": {"id": 1, "name": "Open"},
+                    "priority": {"id": 3, "name": "Normal"},
+                },
+            )
+        return httpx.Response(404, json={"errors": [{"message": "not found"}]})
+
+    client = BacklogClient(
+        make_settings(),
+        client=httpx.Client(
+            transport=httpx.MockTransport(handler),
+            base_url="https://ice.backlog.jp",
+        ),
+    )
+
+    issue = client.create_issue(
+        summary="Example",
+        issue_type_id=5,
+        priority_id=3,
+        assignee_id=10,
+    )
+
+    assert [request.url.path for request in requests] == [
+        "/api/v2/projects/ICESAO_GENTASK",
+        "/api/v2/issues",
+    ]
+    assert issue["issue_key"] == "ICESAO_GENTASK-1"
+
+
 def test_normalize_issue_extracts_stable_fields() -> None:
     normalized = normalize_issue(
         {
