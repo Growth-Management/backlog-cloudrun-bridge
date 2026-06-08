@@ -42,3 +42,10 @@ be provided through Cloud Run environment variables or Secret Manager.
 
 Request logs are emitted as JSON and include `request_id`, HTTP method, path,
 status code, and duration. Secret values are not included in log output.
+
+## Backlog Client
+
+Backlog API access is isolated in `app/clients/backlog_client.py`. The client
+adds the Backlog API key to outbound requests, normalizes issue responses, and
+converts HTTP, timeout, or invalid response failures into `BacklogClientError`
+without exposing secret values.
