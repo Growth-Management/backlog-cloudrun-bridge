@@ -38,27 +38,95 @@ class BacklogClient:
         )
 
     def get_space(self) -> dict[str, Any]:
-        return self._request("GET", "/api/v2/space")
+        return self._request_dict("GET", "/api/v2/space")
 
     def get_project(self, project_key: str | None = None) -> dict[str, Any]:
         key = project_key or self._project_key
-        return self._request("GET", f"/api/v2/projects/{key}")
+        return self._request_dict("GET", f"/api/v2/projects/{key}")
+
+    def get_issue_types(self, project_key: str | None = None) -> list[dict[str, Any]]:
+        key = project_key or self._project_key
+        data = self._request("GET", f"/api/v2/projects/{key}/issueTypes")
+        if not isinstance(data, list):
+            raise BacklogClientError(
+                "Backlog API returned an unexpected issue type response",
+                error_code="backlog_invalid_response",
+            )
+        return data
 
     def get_issue(self, issue_key: str) -> dict[str, Any]:
-        issue = self._request("GET", f"/api/v2/issues/{issue_key}")
+        issue = self._request_dict("GET", f"/api/v2/issues/{issue_key}")
         return normalize_issue(issue)
+
+    def create_issue(
+        self,
+        summary: str,
+        issue_type_id: int,
+        priority_id: int,
+        description: str | None = None,
+        assignee_id: int | None = None,
+        start_date: str | None = None,
+        due_date: str | None = None,
+        project_key: str | None = None,
+    ) -> dict[str, Any]:
+        project = self.get_project(project_key)
+        project_id = project.get("id")
+        if not isinstance(project_id, int):
+            raise BacklogClientError(
+                "Backlog project response does not include a project id",
+                error_code="backlog_invalid_response",
+            )
+
+        form_data: dict[str, Any] = {
+            "projectId": project_id,
+            "summary": summary,
+            "issueTypeId": issue_type_id,
+            "priorityId": priority_id,
+        }
+        if description is not None:
+            form_data["description"] = description
+        if assignee_id is not None:
+            form_data["assigneeId"] = assignee_id
+        if start_date is not None:
+            form_data["startDate"] = start_date
+        if due_date is not None:
+            form_data["dueDate"] = due_date
+
+        issue = self._request_dict("POST", "/api/v2/issues", data=form_data)
+        return normalize_issue(issue)
+
+    def _request_dict(
+        self,
+        method: str,
+        path: str,
+        params: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        response_data = self._request(method, path, params=params, data=data)
+        if not isinstance(response_data, dict):
+            raise BacklogClientError(
+                "Backlog API returned an unexpected response",
+                error_code="backlog_invalid_response",
+            )
+        return response_data
 
     def _request(
         self,
         method: str,
         path: str,
         params: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+        data: dict[str, Any] | None = None,
+    ) -> Any:
         request_params = dict(params or {})
         request_params["apiKey"] = self._api_key
 
         try:
-            response = self._client.request(method, path, params=request_params)
+            response = self._client.request(
+                method,
+                path,
+                params=request_params,
+                data=data,
+            )
             response.raise_for_status()
         except httpx.TimeoutException as exc:
             raise BacklogClientError(
@@ -85,11 +153,6 @@ class BacklogClient:
                 error_code="backlog_invalid_response",
             ) from exc
 
-        if not isinstance(data, dict):
-            raise BacklogClientError(
-                "Backlog API returned an unexpected response",
-                error_code="backlog_invalid_response",
-            )
         return data
 
 
