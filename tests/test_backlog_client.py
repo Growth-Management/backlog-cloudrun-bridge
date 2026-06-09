@@ -203,6 +203,48 @@ def test_client_searches_issues_with_filters() -> None:
     ]
 
 
+def test_client_updates_issue_with_form_data() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["apiKey"] == "backlog-key"
+        assert request.url.path == "/api/v2/issues/ICESAO_GENTASK-1"
+        assert request.method == "PATCH"
+        form_body = request.content.decode()
+        assert "summary=Updated" in form_body
+        assert "statusId=2" in form_body
+        assert "priorityId=3" in form_body
+        assert "assigneeId=10" in form_body
+        return httpx.Response(
+            200,
+            json={
+                "issueKey": "ICESAO_GENTASK-1",
+                "summary": "Updated",
+                "status": {"id": 2, "name": "In Progress"},
+                "priority": {"id": 3, "name": "Normal"},
+                "assignee": {"id": 10, "name": "篠原邦昭"},
+            },
+        )
+
+    client = BacklogClient(
+        make_settings(),
+        client=httpx.Client(
+            transport=httpx.MockTransport(handler),
+            base_url="https://ice.backlog.jp",
+        ),
+    )
+
+    issue = client.update_issue(
+        "ICESAO_GENTASK-1",
+        summary="Updated",
+        status_id=2,
+        priority_id=3,
+        assignee_id=10,
+    )
+
+    assert issue["issue_key"] == "ICESAO_GENTASK-1"
+    assert issue["summary"] == "Updated"
+    assert issue["status"] == {"id": 2, "name": "In Progress"}
+
+
 def test_normalize_issue_extracts_stable_fields() -> None:
     normalized = normalize_issue(
         {

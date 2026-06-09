@@ -54,6 +54,25 @@ class FakeBacklogClient:
             "assignee": {"id": 10, "name": "篠原邦昭"},
         }
 
+    def update_issue(self, **kwargs) -> dict:
+        assert kwargs == {
+            "issue_key": "ICESAO_GENTASK-1",
+            "summary": "Updated",
+            "description": None,
+            "status_id": 2,
+            "priority_id": 3,
+            "assignee_id": 10,
+            "start_date": None,
+            "due_date": "2026-06-10",
+        }
+        return {
+            "issue_key": "ICESAO_GENTASK-1",
+            "summary": "Updated",
+            "status": {"id": 2, "name": "In Progress"},
+            "priority": {"id": 3, "name": "Normal"},
+            "assignee": {"id": 10, "name": "篠原邦昭"},
+        }
+
 
 class FailingBacklogClient:
     def create_issue(self, **kwargs) -> dict:
@@ -136,6 +155,54 @@ def test_get_issue_returns_detail(monkeypatch) -> None:
         "priority": {"id": 3, "name": "Normal"},
         "assignee": None,
     }
+
+
+def test_update_issue_accepts_conversion_fields(monkeypatch) -> None:
+    monkeypatch.setenv("API_AUTH_TOKEN", "test-token")
+    app.dependency_overrides[get_backlog_client] = lambda: FakeBacklogClient()
+    client = TestClient(app)
+
+    response = client.patch(
+        "/issues/ICESAO_GENTASK-1",
+        headers={"Authorization": "Bearer test-token"},
+        json={
+            "summary": "Updated",
+            "status": "in_progress",
+            "priority": "normal",
+            "assignee_id": 10,
+            "due_date": "2026-06-10",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "issue_key": "ICESAO_GENTASK-1",
+        "summary": "Updated",
+        "description": None,
+        "status": {"id": 2, "name": "In Progress"},
+        "priority": {"id": 3, "name": "Normal"},
+        "assignee": {
+            "id": 10,
+            "name": "篠原邦昭",
+            "user_id": None,
+            "mail_address": None,
+        },
+    }
+
+
+def test_update_issue_rejects_empty_body(monkeypatch) -> None:
+    monkeypatch.setenv("API_AUTH_TOKEN", "test-token")
+    app.dependency_overrides[get_backlog_client] = lambda: FakeBacklogClient()
+    client = TestClient(app)
+
+    response = client.patch(
+        "/issues/ICESAO_GENTASK-1",
+        headers={"Authorization": "Bearer test-token"},
+        json={},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "At least one update field is required"}
 
 
 def test_create_issue_requires_bearer_token(monkeypatch) -> None:
