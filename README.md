@@ -43,6 +43,12 @@ be provided through Cloud Run environment variables or Secret Manager.
 Request logs are emitted as JSON and include `request_id`, HTTP method, path,
 status code, and duration. Secret values are not included in log output.
 
+## Operations
+
+Cloud Run deploys are managed by GitHub Actions. See
+[`docs/operations.md`](docs/operations.md) for CI, deploy, health check,
+Secret Manager, Artifact Registry, and rollback verification steps.
+
 ## Backlog Client
 
 Backlog API access is isolated in `app/clients/backlog_client.py`. The client
