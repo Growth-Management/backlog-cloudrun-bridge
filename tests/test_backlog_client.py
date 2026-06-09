@@ -146,6 +146,63 @@ def test_client_creates_issue_with_form_data() -> None:
     assert issue["issue_key"] == "ICESAO_GENTASK-1"
 
 
+def test_client_searches_issues_with_filters() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.url.params["apiKey"] == "backlog-key"
+        if request.url.path == "/api/v2/projects/ICESAO_GENTASK":
+            return httpx.Response(200, json={"id": 123})
+        if request.url.path == "/api/v2/issues":
+            assert request.url.params.get_list("projectId[]") == ["123"]
+            assert request.url.params["keyword"] == "Example"
+            assert request.url.params.get_list("statusId[]") == ["1", "2"]
+            assert request.url.params.get_list("assigneeId[]") == ["10"]
+            assert request.url.params["count"] == "20"
+            assert request.url.params["offset"] == "0"
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "issueKey": "ICESAO_GENTASK-1",
+                        "summary": "Example",
+                        "status": {"id": 1, "name": "Open"},
+                    }
+                ],
+            )
+        return httpx.Response(404, json={"errors": [{"message": "not found"}]})
+
+    client = BacklogClient(
+        make_settings(),
+        client=httpx.Client(
+            transport=httpx.MockTransport(handler),
+            base_url="https://ice.backlog.jp",
+        ),
+    )
+
+    issues = client.search_issues(
+        keyword="Example",
+        status_ids=[1, 2],
+        assignee_ids=[10],
+    )
+
+    assert [request.url.path for request in requests] == [
+        "/api/v2/projects/ICESAO_GENTASK",
+        "/api/v2/issues",
+    ]
+    assert issues == [
+        {
+            "issue_key": "ICESAO_GENTASK-1",
+            "summary": "Example",
+            "description": None,
+            "status": {"id": 1, "name": "Open"},
+            "priority": None,
+            "assignee": None,
+        }
+    ]
+
+
 def test_normalize_issue_extracts_stable_fields() -> None:
     normalized = normalize_issue(
         {
