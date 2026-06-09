@@ -1,11 +1,18 @@
 from app.clients.backlog_client import BacklogClient
-from app.schemas.issue import IssueCreateRequest
+from app.schemas.issue import IssueCreateRequest, IssueUpdateRequest
 
 
 PRIORITY_IDS = {
     "high": 2,
     "normal": 3,
     "low": 4,
+}
+
+STATUS_IDS = {
+    "open": 1,
+    "in_progress": 2,
+    "resolved": 3,
+    "closed": 4,
 }
 
 
@@ -55,6 +62,59 @@ def search_issues(
 
 def get_issue(client: BacklogClient, issue_key: str) -> dict:
     return client.get_issue(issue_key)
+
+
+def update_issue(
+    client: BacklogClient,
+    issue_key: str,
+    request: IssueUpdateRequest,
+) -> dict:
+    if not has_update_value(request):
+        raise ValueError("At least one update field is required")
+
+    return client.update_issue(
+        issue_key=issue_key,
+        summary=request.summary,
+        description=request.description,
+        status_id=resolve_status_id(request.status_id, request.status),
+        priority_id=resolve_priority_id(request.priority_id, request.priority),
+        assignee_id=request.assignee_id,
+        start_date=request.start_date.isoformat() if request.start_date else None,
+        due_date=request.due_date.isoformat() if request.due_date else None,
+    )
+
+
+def has_update_value(request: IssueUpdateRequest) -> bool:
+    return any(
+        value is not None
+        for value in (
+            request.summary,
+            request.description,
+            request.status_id,
+            request.status,
+            request.priority_id,
+            request.priority,
+            request.assignee_id,
+            request.start_date,
+            request.due_date,
+        )
+    )
+
+
+def resolve_status_id(status_id: int | None, status_name: str | None) -> int | None:
+    if status_id is not None:
+        return status_id
+    if status_name is None:
+        return None
+    return STATUS_IDS[status_name]
+
+
+def resolve_priority_id(priority_id: int | None, priority_name: str | None) -> int | None:
+    if priority_id is not None:
+        return priority_id
+    if priority_name is None:
+        return None
+    return PRIORITY_IDS[priority_name]
 
 
 def resolve_issue_type_id(
