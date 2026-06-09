@@ -15,6 +15,18 @@ class IssueCreateRequest(BaseModel):
     due_date: date | None = None
 
 
+class IssueUpdateRequest(BaseModel):
+    summary: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    status_id: int | None = Field(default=None, gt=0)
+    status: Literal["open", "in_progress", "resolved", "closed"] | None = None
+    priority_id: int | None = Field(default=None, gt=0)
+    priority: Literal["high", "normal", "low"] | None = None
+    assignee_id: int | None = Field(default=None, gt=0)
+    start_date: date | None = None
+    due_date: date | None = None
+
+
 class NamedValue(BaseModel):
     id: int | None = None
     name: str | None = None
