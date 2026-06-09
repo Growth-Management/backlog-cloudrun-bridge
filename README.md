@@ -74,3 +74,24 @@ Backlog `priorityId`. Use `issue_type_id` directly, or provide
 `issue_type_name` so the API can resolve it from the configured Backlog project.
 Assignees must be sent as `assignee_id`; display names are not forwarded to
 Backlog.
+
+## Search and Get Issues
+
+`GET /issues` searches Backlog issues in the configured project. This route
+requires Bearer authentication.
+
+```bash
+curl -H "Authorization: Bearer change-me" \
+  "http://localhost:8080/issues?keyword=Example&status_id=1&assignee_id=10"
+```
+
+Use repeated query parameters to send multiple status or assignee IDs:
+`status_id=1&status_id=2`. The response contains a normalized issue list,
+`count`, and `offset`.
+
+`GET /issues/{issue_key}` returns details for a confirmed Backlog issue key:
+
+```bash
+curl -H "Authorization: Bearer change-me" \
+  http://localhost:8080/issues/ICESAO_GENTASK-1
+```
