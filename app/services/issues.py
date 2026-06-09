@@ -31,6 +31,32 @@ def create_issue(
     )
 
 
+def search_issues(
+    client: BacklogClient,
+    keyword: str | None,
+    status_ids: list[int] | None,
+    assignee_ids: list[int] | None,
+    count: int,
+    offset: int,
+) -> dict:
+    issues = client.search_issues(
+        keyword=keyword,
+        status_ids=status_ids,
+        assignee_ids=assignee_ids,
+        count=count,
+        offset=offset,
+    )
+    return {
+        "issues": issues,
+        "count": len(issues),
+        "offset": offset,
+    }
+
+
+def get_issue(client: BacklogClient, issue_key: str) -> dict:
+    return client.get_issue(issue_key)
+
+
 def resolve_issue_type_id(
     client: BacklogClient,
     issue_type_id: int | None,
