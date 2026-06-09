@@ -49,3 +49,28 @@ Backlog API access is isolated in `app/clients/backlog_client.py`. The client
 adds the Backlog API key to outbound requests, normalizes issue responses, and
 converts HTTP, timeout, or invalid response failures into `BacklogClientError`
 without exposing secret values.
+
+## Create Issue
+
+`POST /issues` creates a Backlog issue. This route requires Bearer
+authentication.
+
+```bash
+curl -X POST http://localhost:8080/issues \
+  -H "Authorization: Bearer change-me" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "summary": "Example issue",
+    "description": "Issue body",
+    "issue_type_id": 5,
+    "priority": "normal",
+    "assignee_id": 10
+  }'
+```
+
+Backlog requires numeric IDs for issue type, priority, and assignee values.
+The API accepts `priority` as `high`, `normal`, or `low` and converts it to a
+Backlog `priorityId`. Use `issue_type_id` directly, or provide
+`issue_type_name` so the API can resolve it from the configured Backlog project.
+Assignees must be sent as `assignee_id`; display names are not forwarded to
+Backlog.
