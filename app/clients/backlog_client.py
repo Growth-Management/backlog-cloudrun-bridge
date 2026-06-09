@@ -58,6 +58,43 @@ class BacklogClient:
         issue = self._request_dict("GET", f"/api/v2/issues/{issue_key}")
         return normalize_issue(issue)
 
+    def search_issues(
+        self,
+        keyword: str | None = None,
+        status_ids: list[int] | None = None,
+        assignee_ids: list[int] | None = None,
+        count: int = 20,
+        offset: int = 0,
+        project_key: str | None = None,
+    ) -> list[dict[str, Any]]:
+        project = self.get_project(project_key)
+        project_id = project.get("id")
+        if not isinstance(project_id, int):
+            raise BacklogClientError(
+                "Backlog project response does not include a project id",
+                error_code="backlog_invalid_response",
+            )
+
+        params: dict[str, Any] = {
+            "projectId[]": [project_id],
+            "count": count,
+            "offset": offset,
+        }
+        if keyword:
+            params["keyword"] = keyword
+        if status_ids:
+            params["statusId[]"] = status_ids
+        if assignee_ids:
+            params["assigneeId[]"] = assignee_ids
+
+        issues = self._request("GET", "/api/v2/issues", params=params)
+        if not isinstance(issues, list):
+            raise BacklogClientError(
+                "Backlog API returned an unexpected issue list response",
+                error_code="backlog_invalid_response",
+            )
+        return [normalize_issue(issue) for issue in issues if isinstance(issue, dict)]
+
     def create_issue(
         self,
         summary: str,

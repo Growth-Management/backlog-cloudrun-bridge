@@ -6,6 +6,32 @@ from app.main import app
 
 
 class FakeBacklogClient:
+    def search_issues(self, **kwargs) -> list[dict]:
+        assert kwargs == {
+            "keyword": "Example",
+            "status_ids": [1, 2],
+            "assignee_ids": [10],
+            "count": 20,
+            "offset": 0,
+        }
+        return [
+            {
+                "issue_key": "ICESAO_GENTASK-1",
+                "summary": "Example",
+                "status": {"id": 1, "name": "Open"},
+            }
+        ]
+
+    def get_issue(self, issue_key: str) -> dict:
+        assert issue_key == "ICESAO_GENTASK-1"
+        return {
+            "issue_key": "ICESAO_GENTASK-1",
+            "summary": "Example",
+            "description": "Body",
+            "status": {"id": 1, "name": "Open"},
+            "priority": {"id": 3, "name": "Normal"},
+        }
+
     def get_issue_types(self) -> list[dict]:
         return [{"id": 5, "name": "Task"}]
 
@@ -62,6 +88,54 @@ def test_create_issue_accepts_valid_request(monkeypatch) -> None:
 
     assert response.status_code == 201
     assert response.json()["issue_key"] == "ICESAO_GENTASK-1"
+
+
+def test_list_issues_accepts_filters(monkeypatch) -> None:
+    monkeypatch.setenv("API_AUTH_TOKEN", "test-token")
+    app.dependency_overrides[get_backlog_client] = lambda: FakeBacklogClient()
+    client = TestClient(app)
+
+    response = client.get(
+        "/issues?keyword=Example&status_id=1&status_id=2&assignee_id=10",
+        headers={"Authorization": "Bearer test-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "issues": [
+            {
+                "issue_key": "ICESAO_GENTASK-1",
+                "summary": "Example",
+                "description": None,
+                "status": {"id": 1, "name": "Open"},
+                "priority": None,
+                "assignee": None,
+            }
+        ],
+        "count": 1,
+        "offset": 0,
+    }
+
+
+def test_get_issue_returns_detail(monkeypatch) -> None:
+    monkeypatch.setenv("API_AUTH_TOKEN", "test-token")
+    app.dependency_overrides[get_backlog_client] = lambda: FakeBacklogClient()
+    client = TestClient(app)
+
+    response = client.get(
+        "/issues/ICESAO_GENTASK-1",
+        headers={"Authorization": "Bearer test-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "issue_key": "ICESAO_GENTASK-1",
+        "summary": "Example",
+        "description": "Body",
+        "status": {"id": 1, "name": "Open"},
+        "priority": {"id": 3, "name": "Normal"},
+        "assignee": None,
+    }
 
 
 def test_create_issue_requires_bearer_token(monkeypatch) -> None:
