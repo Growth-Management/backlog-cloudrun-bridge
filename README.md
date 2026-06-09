@@ -95,3 +95,26 @@ Use repeated query parameters to send multiple status or assignee IDs:
 curl -H "Authorization: Bearer change-me" \
   http://localhost:8080/issues/ICESAO_GENTASK-1
 ```
+
+## Update Issue
+
+`PATCH /issues/{issue_key}` updates a confirmed Backlog issue key. This route
+requires Bearer authentication.
+
+```bash
+curl -X PATCH http://localhost:8080/issues/ICESAO_GENTASK-1 \
+  -H "Authorization: Bearer change-me" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "summary": "Updated summary",
+    "status": "in_progress",
+    "priority": "normal",
+    "assignee_id": 10
+  }'
+```
+
+The API accepts direct `status_id` and `priority_id` values for environments
+with custom Backlog IDs. It also supports default name mappings:
+`open` -> `1`, `in_progress` -> `2`, `resolved` -> `3`, `closed` -> `4` and
+`high` -> `2`, `normal` -> `3`, `low` -> `4`. Assignees must be sent as
+`assignee_id`; display names are not forwarded to Backlog.
