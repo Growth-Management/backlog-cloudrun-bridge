@@ -132,6 +132,40 @@ class BacklogClient:
         issue = self._request_dict("POST", "/api/v2/issues", data=form_data)
         return normalize_issue(issue)
 
+    def update_issue(
+        self,
+        issue_key: str,
+        summary: str | None = None,
+        description: str | None = None,
+        status_id: int | None = None,
+        priority_id: int | None = None,
+        assignee_id: int | None = None,
+        start_date: str | None = None,
+        due_date: str | None = None,
+    ) -> dict[str, Any]:
+        form_data: dict[str, Any] = {}
+        if summary is not None:
+            form_data["summary"] = summary
+        if description is not None:
+            form_data["description"] = description
+        if status_id is not None:
+            form_data["statusId"] = status_id
+        if priority_id is not None:
+            form_data["priorityId"] = priority_id
+        if assignee_id is not None:
+            form_data["assigneeId"] = assignee_id
+        if start_date is not None:
+            form_data["startDate"] = start_date
+        if due_date is not None:
+            form_data["dueDate"] = due_date
+
+        issue = self._request_dict(
+            "PATCH",
+            f"/api/v2/issues/{issue_key}",
+            data=form_data,
+        )
+        return normalize_issue(issue)
+
     def _request_dict(
         self,
         method: str,
