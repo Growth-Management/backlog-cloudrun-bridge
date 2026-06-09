@@ -38,7 +38,7 @@ router = APIRouter(
 )
 
 
-@router.post("")
+@router.post("", response_model=None)
 def handle_mcp_request(
     payload: JsonRpcRequest,
     client: Annotated[BacklogClient, Depends(get_backlog_client)],
