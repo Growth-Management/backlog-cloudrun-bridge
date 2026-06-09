@@ -5,8 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.clients.backlog_client import BacklogClient, BacklogClientError
 from app.core.config import Settings, get_settings
 from app.core.security import verify_bearer_token
-from app.schemas.issue import IssueCreateRequest, IssueListResponse, IssueResponse
-from app.services.issues import create_issue, get_issue, search_issues
+from app.schemas.issue import (
+    IssueCreateRequest,
+    IssueListResponse,
+    IssueResponse,
+    IssueUpdateRequest,
+)
+from app.services.issues import create_issue, get_issue, search_issues, update_issue
 
 router = APIRouter(
     prefix="/issues",
@@ -70,6 +75,23 @@ def create_backlog_issue(
 ) -> dict:
     try:
         return create_issue(client, request)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except BacklogClientError as exc:
+        raise_upstream_error(exc)
+
+
+@router.patch("/{issue_key}", response_model=IssueResponse)
+def update_backlog_issue(
+    issue_key: str,
+    request: IssueUpdateRequest,
+    client: BacklogClient = Depends(get_backlog_client),
+) -> dict:
+    try:
+        return update_issue(client, issue_key, request)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
