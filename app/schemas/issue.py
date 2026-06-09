@@ -34,3 +34,9 @@ class IssueResponse(BaseModel):
     status: NamedValue | None = None
     priority: NamedValue | None = None
     assignee: Assignee | None = None
+
+
+class IssueListResponse(BaseModel):
+    issues: list[IssueResponse]
+    count: int
+    offset: int
