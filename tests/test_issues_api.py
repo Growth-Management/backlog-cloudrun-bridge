@@ -181,7 +181,12 @@ def test_update_issue_accepts_conversion_fields(monkeypatch) -> None:
         "description": None,
         "status": {"id": 2, "name": "In Progress"},
         "priority": {"id": 3, "name": "Normal"},
-        "assignee": {"id": 10, "name": "篠原邦昭"},
+        "assignee": {
+            "id": 10,
+            "name": "篠原邦昭",
+            "user_id": None,
+            "mail_address": None,
+        },
     }
 
 
