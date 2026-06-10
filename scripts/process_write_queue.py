@@ -248,7 +248,11 @@ class GoogleSheetsWriteQueue:
             return []
         rows = []
         for index, raw_row in enumerate(values[1:], start=2):
-            padded = [*raw_row, *([""] * (len(WRITE_QUEUE_HEADERS) - len(raw_row)))]
+            raw_values = raw_row[: len(WRITE_QUEUE_HEADERS)]
+            padded = [
+                *raw_values,
+                *([""] * (len(WRITE_QUEUE_HEADERS) - len(raw_values))),
+            ]
             rows.append(
                 QueueRow(
                     sheet_row_number=index,
