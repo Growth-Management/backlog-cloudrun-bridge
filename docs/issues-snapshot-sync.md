@@ -6,9 +6,8 @@ Backlog API から課題一覧を取得し、Google Sheets の `issues_snapshot`
 ## 初期スコープ
 
 - Backlog -> Google Sheets の読み取り同期のみ
-- Backlog への書き込みは行わない
 - `issues_snapshot` は原則 read-only として扱う
-- `write_queue` による Backlog 反映は後続タスクで実装する
+- Backlog への書き込みは `write_queue` に承認済み要求を積み、許可IP内PCの agent から反映する
 
 ## 前提
 
@@ -90,7 +89,7 @@ python scripts/sync_issues_snapshot.py
 
 - 通常同期: 15分ごと
 - master系同期: 後続タスクで 1日1回
-- Backlog反映キュー: 後続タスクで 5分ごと
+- Backlog反映キュー: 5分ごと
 
 ## Windows タスクスケジューラ例
 
@@ -109,7 +108,87 @@ schtasks /Create /SC MINUTE /MO 15 /TN "BacklogIssuesSnapshotSync" /TR "C:\path\
 - サービスアカウントキーは一般ユーザーが読める場所に置かない
 - PCを外部公開しない
 - `issues_snapshot` は同期結果として扱い、人手編集しない
-- Backlogへの書き込みは後続の `write_queue` 実装まで行わない
+- Backlogへの書き込みは `write_queue` 経由に限定する
+
+## write_queue 反映
+
+`write_queue` シートに承認済みの変更要求を登録し、許可IP内PCの agent が Backlog API へ反映します。
+
+初期対応操作:
+
+- `create_issue`
+- `update_issue`
+- `add_comment`
+
+対象外:
+
+- 課題削除
+- 添付ファイル
+- プロジェクト移動
+- 一括大量更新
+
+列:
+
+| 列 | 内容 |
+|---|---|
+| `request_id` | 一意ID |
+| `operation` | `create_issue`, `update_issue`, `add_comment` |
+| `issue_key` | 更新・コメント対象の課題キー |
+| `summary` | 件名 |
+| `description` | 説明 |
+| `issue_type_id` | 新規作成時の種別ID |
+| `priority_id` | 優先度ID |
+| `status_id` | 状態ID |
+| `assignee_id` | 担当者ID |
+| `start_date` / `due_date` | 開始日・期限 |
+| `comment` | 追加コメント |
+| `requested_by` | 依頼者 |
+| `requested_at` | 依頼日時 |
+| `approval_status` | `approved` のみ処理 |
+| `execution_status` | `queued` のみ処理 |
+| `validation_error` | 検証・反映エラー |
+| `applied_at` | 反映日時 |
+| `backlog_response` | Backlog応答要約 |
+| `retry_count` | 失敗回数 |
+
+処理条件:
+
+```text
+approval_status = approved
+execution_status = queued
+```
+
+手動実行:
+
+```bash
+python scripts/process_write_queue.py
+```
+
+dry-run:
+
+```bash
+WRITE_QUEUE_DRY_RUN=true python scripts/process_write_queue.py
+```
+
+環境変数:
+
+```bash
+export WRITE_QUEUE_SHEET_NAME="write_queue"
+export WRITE_QUEUE_MAX_ROWS="20"
+export WRITE_QUEUE_DRY_RUN="false"
+```
+
+成功時:
+
+```json
+{"status":"ok","sheet":"write_queue","processed_count":1,"dry_run":false}
+```
+
+Windows タスクスケジューラ例:
+
+```powershell
+schtasks /Create /SC MINUTE /MO 5 /TN "BacklogWriteQueueProcessor" /TR "C:\path\to\repo\.venv-sync\Scripts\python.exe C:\path\to\repo\scripts\process_write_queue.py"
+```
 
 ## トラブルシュート
 
