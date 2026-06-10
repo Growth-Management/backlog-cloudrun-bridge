@@ -13,8 +13,8 @@ Backlog API から課題一覧を取得し、Google Sheets の `issues_snapshot`
 
 - 実行PCが Backlog の許可IP内にある
 - Backlog API key を発行済み
-- Google Cloud のサービスアカウントを用意済み
-- 対象 Google Spreadsheet にサービスアカウントの編集権限を付与済み
+- 対象 Google Spreadsheet を操作できる Google ユーザーを用意済み
+- Google Workspace の共有ポリシーでサービスアカウントを追加できない場合は、ユーザーOAuth方式を使う
 
 ## 同期先シート
 
@@ -48,7 +48,10 @@ source .venv-sync/bin/activate
 python -m pip install -r requirements-sync.txt
 ```
 
-Google サービスアカウントキーを実行PC上に配置し、Spreadsheet をそのサービスアカウントに共有します。
+Google Sheets 認証は、ユーザーOAuth方式とサービスアカウント方式に対応しています。
+Google Workspace の共有ポリシーで `gserviceaccount.com` を Spreadsheet に共有できない場合は、ユーザーOAuth方式を使います。
+
+ユーザーOAuth方式では、Google Cloud Console で OAuth クライアントを作成し、デスクトップアプリ用の client secret JSON を実行PCに配置します。
 
 ## 環境変数
 
@@ -57,7 +60,6 @@ Google サービスアカウントキーを実行PC上に配置し、Spreadsheet
 ```bash
 export BACKLOG_API_KEY="Backlog API key"
 export GOOGLE_SHEETS_SPREADSHEET_ID="Google Spreadsheet ID"
-export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
 ```
 
 任意:
@@ -65,10 +67,20 @@ export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
 ```bash
 export BACKLOG_BASE_URL="https://ice.backlog.jp"
 export BACKLOG_PROJECT_KEY="ICESAO_GENTASK"
+export GOOGLE_AUTH_MODE="user_oauth"
+export GOOGLE_OAUTH_CLIENT_SECRET_FILE="/path/to/oauth-client-secret.json"
+export GOOGLE_OAUTH_TOKEN_FILE="/path/to/google-oauth-token.json"
 export ISSUES_SNAPSHOT_SHEET_NAME="issues_snapshot"
 export ISSUES_SYNC_PAGE_SIZE="100"
 export ISSUES_SYNC_MAX_PAGES="10"
 export BACKLOG_TIMEOUT_SECONDS="20"
+```
+
+サービスアカウント方式を使う場合:
+
+```bash
+export GOOGLE_AUTH_MODE="service_account"
+export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
 ```
 
 ## 手動実行
@@ -76,6 +88,9 @@ export BACKLOG_TIMEOUT_SECONDS="20"
 ```bash
 python scripts/sync_issues_snapshot.py
 ```
+
+ユーザーOAuth方式では、初回実行時にブラウザ認証が開きます。
+認証後、`GOOGLE_OAUTH_TOKEN_FILE` にトークンが保存され、以降の定期実行では保存済みトークンを利用します。
 
 成功時は次のような JSON を標準出力に出します。
 
@@ -104,8 +119,8 @@ schtasks /Create /SC MINUTE /MO 15 /TN "BacklogIssuesSnapshotSync" /TR "C:\path\
 ## セキュリティ
 
 - Backlog API key は許可IP内PCのみに配置する
-- Google サービスアカウントは対象 Spreadsheet への最小権限にする
-- サービスアカウントキーは一般ユーザーが読める場所に置かない
+- Google OAuth client secret と token は一般ユーザーが読める場所に置かない
+- サービスアカウント方式を使う場合は、対象 Spreadsheet への最小権限にする
 - PCを外部公開しない
 - `issues_snapshot` は同期結果として扱い、人手編集しない
 - Backlogへの書き込みは `write_queue` 経由に限定する
@@ -200,6 +215,13 @@ Backlog API が 403 の場合:
 
 Google Sheets API が 403 の場合:
 
-- Spreadsheet がサービスアカウントに共有されているか確認
+- `GOOGLE_AUTH_MODE=user_oauth` の場合は、認証したGoogleユーザーが Spreadsheet を編集できるか確認
+- `GOOGLE_AUTH_MODE=service_account` の場合は、Spreadsheet がサービスアカウントに共有されているか確認
 - `GOOGLE_APPLICATION_CREDENTIALS` の JSON が正しいか確認
 - Google Sheets API が有効か確認
+
+Google Workspace の共有ポリシーでサービスアカウントを追加できない場合:
+
+- `GOOGLE_AUTH_MODE=user_oauth` に切り替える
+- `GOOGLE_OAUTH_CLIENT_SECRET_FILE` にデスクトップアプリ用 OAuth client secret JSON を指定する
+- 初回実行時にブラウザで対象Spreadsheetへアクセスできるユーザーとして認証する

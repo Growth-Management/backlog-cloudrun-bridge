@@ -8,6 +8,8 @@ from typing import Any
 
 import httpx
 
+from scripts.google_sheets_auth import build_sheets_service
+
 
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 DEFAULT_BACKLOG_BASE_URL = "https://ice.backlog.jp"
@@ -15,6 +17,8 @@ DEFAULT_BACKLOG_PROJECT_KEY = "ICESAO_GENTASK"
 DEFAULT_SHEET_NAME = "issues_snapshot"
 DEFAULT_PAGE_SIZE = 100
 DEFAULT_MAX_PAGES = 10
+DEFAULT_GOOGLE_AUTH_MODE = "service_account"
+DEFAULT_GOOGLE_OAUTH_TOKEN_FILE = "google-oauth-token.json"
 
 ISSUES_SNAPSHOT_HEADERS = [
     "issue_key",
@@ -48,6 +52,9 @@ class SyncSettings:
     spreadsheet_id: str
     sheet_name: str
     google_credentials_file: str
+    google_auth_mode: str
+    google_oauth_client_secret_file: str
+    google_oauth_token_file: str
     page_size: int
     max_pages: int
     timeout_seconds: float
@@ -64,7 +71,21 @@ class BacklogSyncError(RuntimeError):
 def get_settings() -> SyncSettings:
     backlog_api_key = require_env("BACKLOG_API_KEY")
     spreadsheet_id = require_env("GOOGLE_SHEETS_SPREADSHEET_ID")
-    google_credentials_file = require_env("GOOGLE_APPLICATION_CREDENTIALS")
+    google_auth_mode = os.getenv("GOOGLE_AUTH_MODE", DEFAULT_GOOGLE_AUTH_MODE)
+    google_credentials_file = ""
+    google_oauth_client_secret_file = ""
+    google_oauth_token_file = os.getenv(
+        "GOOGLE_OAUTH_TOKEN_FILE",
+        DEFAULT_GOOGLE_OAUTH_TOKEN_FILE,
+    )
+    if google_auth_mode == "service_account":
+        google_credentials_file = require_env("GOOGLE_APPLICATION_CREDENTIALS")
+    elif google_auth_mode == "user_oauth":
+        google_oauth_client_secret_file = require_env("GOOGLE_OAUTH_CLIENT_SECRET_FILE")
+    else:
+        raise SyncConfigurationError(
+            "GOOGLE_AUTH_MODE must be either service_account or user_oauth"
+        )
     return SyncSettings(
         backlog_base_url=os.getenv("BACKLOG_BASE_URL", DEFAULT_BACKLOG_BASE_URL),
         backlog_api_key=backlog_api_key,
@@ -72,6 +93,9 @@ def get_settings() -> SyncSettings:
         spreadsheet_id=spreadsheet_id,
         sheet_name=os.getenv("ISSUES_SNAPSHOT_SHEET_NAME", DEFAULT_SHEET_NAME),
         google_credentials_file=google_credentials_file,
+        google_auth_mode=google_auth_mode,
+        google_oauth_client_secret_file=google_oauth_client_secret_file,
+        google_oauth_token_file=google_oauth_token_file,
         page_size=int(os.getenv("ISSUES_SYNC_PAGE_SIZE", str(DEFAULT_PAGE_SIZE))),
         max_pages=int(os.getenv("ISSUES_SYNC_MAX_PAGES", str(DEFAULT_MAX_PAGES))),
         timeout_seconds=float(os.getenv("BACKLOG_TIMEOUT_SECONDS", "20")),
@@ -170,14 +194,13 @@ class BacklogIssuesClient:
 
 class GoogleSheetsIssuesSnapshot:
     def __init__(self, settings: SyncSettings) -> None:
-        from google.oauth2 import service_account
-        from googleapiclient.discovery import build
-
-        credentials = service_account.Credentials.from_service_account_file(
-            settings.google_credentials_file,
+        self._service = build_sheets_service(
+            auth_mode=settings.google_auth_mode,
             scopes=[SHEETS_SCOPE],
+            service_account_file=settings.google_credentials_file,
+            oauth_client_secret_file=settings.google_oauth_client_secret_file,
+            oauth_token_file=settings.google_oauth_token_file,
         )
-        self._service = build("sheets", "v4", credentials=credentials)
         self._spreadsheet_id = settings.spreadsheet_id
         self._sheet_name = settings.sheet_name
 

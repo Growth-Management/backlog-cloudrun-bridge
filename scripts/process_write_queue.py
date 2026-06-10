@@ -9,9 +9,12 @@ import httpx
 
 from scripts.sync_issues_snapshot import (
     BacklogSyncError,
+    DEFAULT_GOOGLE_AUTH_MODE,
+    DEFAULT_GOOGLE_OAUTH_TOKEN_FILE,
     get_nested,
     require_env,
 )
+from scripts.google_sheets_auth import build_sheets_service
 
 
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
@@ -60,6 +63,9 @@ class WriteQueueSettings:
     spreadsheet_id: str
     queue_sheet_name: str
     google_credentials_file: str
+    google_auth_mode: str
+    google_oauth_client_secret_file: str
+    google_oauth_token_file: str
     max_rows: int
     timeout_seconds: float
     dry_run: bool
@@ -85,13 +91,31 @@ class QueueValidationError(ValueError):
 
 
 def get_settings() -> WriteQueueSettings:
+    google_auth_mode = os.getenv("GOOGLE_AUTH_MODE", DEFAULT_GOOGLE_AUTH_MODE)
+    google_credentials_file = ""
+    google_oauth_client_secret_file = ""
+    google_oauth_token_file = os.getenv(
+        "GOOGLE_OAUTH_TOKEN_FILE",
+        DEFAULT_GOOGLE_OAUTH_TOKEN_FILE,
+    )
+    if google_auth_mode == "service_account":
+        google_credentials_file = require_env("GOOGLE_APPLICATION_CREDENTIALS")
+    elif google_auth_mode == "user_oauth":
+        google_oauth_client_secret_file = require_env("GOOGLE_OAUTH_CLIENT_SECRET_FILE")
+    else:
+        raise ValueError(
+            "GOOGLE_AUTH_MODE must be either service_account or user_oauth"
+        )
     return WriteQueueSettings(
         backlog_base_url=os.getenv("BACKLOG_BASE_URL", DEFAULT_BACKLOG_BASE_URL),
         backlog_api_key=require_env("BACKLOG_API_KEY"),
         backlog_project_key=os.getenv("BACKLOG_PROJECT_KEY", DEFAULT_BACKLOG_PROJECT_KEY),
         spreadsheet_id=require_env("GOOGLE_SHEETS_SPREADSHEET_ID"),
         queue_sheet_name=os.getenv("WRITE_QUEUE_SHEET_NAME", DEFAULT_QUEUE_SHEET_NAME),
-        google_credentials_file=require_env("GOOGLE_APPLICATION_CREDENTIALS"),
+        google_credentials_file=google_credentials_file,
+        google_auth_mode=google_auth_mode,
+        google_oauth_client_secret_file=google_oauth_client_secret_file,
+        google_oauth_token_file=google_oauth_token_file,
         max_rows=int(os.getenv("WRITE_QUEUE_MAX_ROWS", str(DEFAULT_MAX_ROWS))),
         timeout_seconds=float(os.getenv("BACKLOG_TIMEOUT_SECONDS", "20")),
         dry_run=os.getenv("WRITE_QUEUE_DRY_RUN", "false").lower() == "true",
@@ -199,14 +223,13 @@ class BacklogWriteClient:
 
 class GoogleSheetsWriteQueue:
     def __init__(self, settings: WriteQueueSettings) -> None:
-        from google.oauth2 import service_account
-        from googleapiclient.discovery import build
-
-        credentials = service_account.Credentials.from_service_account_file(
-            settings.google_credentials_file,
+        self._service = build_sheets_service(
+            auth_mode=settings.google_auth_mode,
             scopes=[SHEETS_SCOPE],
+            service_account_file=settings.google_credentials_file,
+            oauth_client_secret_file=settings.google_oauth_client_secret_file,
+            oauth_token_file=settings.google_oauth_token_file,
         )
-        self._service = build("sheets", "v4", credentials=credentials)
         self._spreadsheet_id = settings.spreadsheet_id
         self._sheet_name = settings.queue_sheet_name
 
