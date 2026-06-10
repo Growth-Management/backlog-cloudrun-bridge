@@ -6,9 +6,8 @@ Backlog API から課題一覧を取得し、Google Sheets の `issues_snapshot`
 ## 初期スコープ
 
 - Backlog -> Google Sheets の読み取り同期のみ
-- Backlog への書き込みは行わない
 - `issues_snapshot` は原則 read-only として扱う
-- `write_queue` による Backlog 反映は後続タスクで実装する
+- Backlog への書き込みは `write_queue` に承認済み要求を積み、許可IP内PCの agent から反映する
 
 ## 前提
 
