@@ -331,6 +331,7 @@ def process_queue_row(
     try:
         operation = require_value(row, "operation")
         validate_operation(operation)
+        validate_row_for_operation(row, operation)
         if dry_run:
             response = {"dry_run": True, "operation": operation}
         elif operation == "create_issue":
@@ -344,7 +345,9 @@ def process_queue_row(
             execution_status="applied" if not dry_run else "validated",
             validation_error="",
             applied_at=datetime.now(UTC).isoformat() if not dry_run else "",
-            backlog_response=summarize_backlog_response(response),
+            backlog_response=summarize_dry_run_response(response)
+            if dry_run
+            else summarize_backlog_response(response),
             retry_count=retry_count,
         )
     except (BacklogSyncError, QueueValidationError, ValueError) as exc:
@@ -361,6 +364,38 @@ def validate_operation(operation: str) -> None:
     allowed = {"create_issue", "update_issue", "add_comment"}
     if operation not in allowed:
         raise QueueValidationError(f"Unsupported operation: {operation}")
+
+
+def validate_row_for_operation(row: dict[str, str], operation: str) -> None:
+    if operation == "create_issue":
+        require_value(row, "summary")
+        require_int(row, "issue_type_id")
+        require_int(row, "priority_id")
+        optional_int(row, "assignee_id")
+        return
+
+    if operation == "update_issue":
+        require_value(row, "issue_key")
+        update_fields = compact_form(
+            {
+                "summary": row.get("summary"),
+                "description": row.get("description"),
+                "status_id": row.get("status_id"),
+                "priority_id": row.get("priority_id"),
+                "assignee_id": row.get("assignee_id"),
+                "start_date": row.get("start_date"),
+                "due_date": row.get("due_date"),
+            }
+        )
+        if not update_fields:
+            raise QueueValidationError("update_issue requires at least one update field")
+        optional_int(row, "status_id")
+        optional_int(row, "priority_id")
+        optional_int(row, "assignee_id")
+        return
+
+    require_value(row, "issue_key")
+    require_value(row, "comment")
 
 
 def require_value(row: dict[str, str], key: str) -> str:
@@ -415,6 +450,10 @@ def summarize_backlog_response(response: dict[str, Any]) -> str:
         "status": get_nested(response, "status", "name"),
     }
     return json.dumps(compact_form(summary), ensure_ascii=False, separators=(",", ":"))
+
+
+def summarize_dry_run_response(response: dict[str, Any]) -> str:
+    return json.dumps(response, ensure_ascii=False, separators=(",", ":"))
 
 
 def column_letter(column_number: int) -> str:
