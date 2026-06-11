@@ -49,6 +49,11 @@ Cloud Run deploys are managed by GitHub Actions. See
 [`docs/operations.md`](docs/operations.md) for CI, deploy, health check,
 Secret Manager, Artifact Registry, and rollback verification steps.
 
+Allowed-IP Windows PC sync tasks are documented in
+[`docs/windows-task-scheduler.md`](docs/windows-task-scheduler.md). They run
+Backlog -> Google Sheets `issues_snapshot` sync and Google Sheets `write_queue`
+-> Backlog writeback on Windows Task Scheduler.
+
 ## Backlog Client
 
 Backlog API access is isolated in `app/clients/backlog_client.py`. The client
