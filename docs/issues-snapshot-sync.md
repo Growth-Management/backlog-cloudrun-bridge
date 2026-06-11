@@ -86,7 +86,7 @@ export GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account.json"
 ## 手動実行
 
 ```bash
-python scripts/sync_issues_snapshot.py
+python -m scripts.sync_issues_snapshot
 ```
 
 ユーザーOAuth方式では、初回実行時にブラウザ認証が開きます。
@@ -106,15 +106,11 @@ python scripts/sync_issues_snapshot.py
 - master系同期: 後続タスクで 1日1回
 - Backlog反映キュー: 5分ごと
 
-## Windows タスクスケジューラ例
+## Windows タスクスケジューラ
 
-15分ごとに実行する場合:
-
-```powershell
-schtasks /Create /SC MINUTE /MO 15 /TN "BacklogIssuesSnapshotSync" /TR "C:\path\to\repo\.venv-sync\Scripts\python.exe C:\path\to\repo\scripts\sync_issues_snapshot.py"
-```
-
-環境変数は、実行ユーザーのユーザー環境変数、または `.cmd` ラッパーで設定します。
+許可IP内PCでの定期実行は PowerShell ラッパー経由で行います。
+環境変数、ログ出力、タスク登録コマンドは
+[`docs/windows-task-scheduler.md`](windows-task-scheduler.md) を参照してください。
 
 ## セキュリティ
 
@@ -176,13 +172,13 @@ execution_status = queued
 手動実行:
 
 ```bash
-python scripts/process_write_queue.py
+python -m scripts.process_write_queue
 ```
 
 dry-run:
 
 ```bash
-WRITE_QUEUE_DRY_RUN=true python scripts/process_write_queue.py
+WRITE_QUEUE_DRY_RUN=true python -m scripts.process_write_queue
 ```
 
 環境変数:
@@ -199,11 +195,9 @@ export WRITE_QUEUE_DRY_RUN="false"
 {"status":"ok","sheet":"write_queue","processed_count":1,"dry_run":false}
 ```
 
-Windows タスクスケジューラ例:
-
-```powershell
-schtasks /Create /SC MINUTE /MO 5 /TN "BacklogWriteQueueProcessor" /TR "C:\path\to\repo\.venv-sync\Scripts\python.exe C:\path\to\repo\scripts\process_write_queue.py"
-```
+Windows タスクスケジューラで定期実行する場合は
+[`docs/windows-task-scheduler.md`](windows-task-scheduler.md) の
+`Backlog Write Queue Processor` 登録手順を使います。
 
 ## トラブルシュート
 
