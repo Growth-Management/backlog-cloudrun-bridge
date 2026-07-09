@@ -1,0 +1,15 @@
+# Local environment files and credentials
+scripts/windows/backlog-sync-env.ps1
+*.log
+logs/
+.venv/
+.venv-sync/
+__pycache__/
+*.pyc
+
+# Google and Backlog secrets
+google-oauth-token.json
+*oauth-token*.json
+*client-secret*.json
+*service-account*.json
+.env
