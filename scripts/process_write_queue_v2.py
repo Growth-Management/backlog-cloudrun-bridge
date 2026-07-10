@@ -246,7 +246,7 @@ def parse_payload(row: dict[str, str]) -> dict[str, str]:
         issue_type_id = str(payload.get("issue_type_id") or payload.get("issueTypeId") or "").strip()
         priority_id = str(payload.get("priority_id") or payload.get("priorityId") or "").strip()
         assignee_id = str(payload.get("assignee_id") or payload.get("assigneeId") or "").strip()
-        due_date = payload.get("due_date") or payload.get("dueDate") or row.get("due_date", "")
+        due_date = normalize_due_date(payload.get("due_date") or payload.get("dueDate") or row.get("due_date", ""))
 
         if not issue_title:
             raise ValueError("issue_title is required")
@@ -291,6 +291,13 @@ def parse_payload(row: dict[str, str]) -> dict[str, str]:
         return {"action": "change_assignee", "target_issue_key": issue_key, "assignee_name": assignee_name}
 
     raise ValueError(f"Unsupported operation_type: {operation_type}")
+
+
+def normalize_due_date(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return text[:10]
 
 def add_comment(s: Settings, issue_key: str, comment: str) -> dict[str, Any]:
     with httpx.Client(base_url=s.backlog_base_url.rstrip("/"), timeout=s.timeout_seconds) as client:
@@ -337,6 +344,7 @@ def create_issue(s: Settings, payload: dict[str, str]) -> dict[str, Any]:
         )
         res.raise_for_status()
         return res.json()
+
 
 
 def change_status(s: Settings, issue_key: str, status_id: str) -> dict[str, Any]:
