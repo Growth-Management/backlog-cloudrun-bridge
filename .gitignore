@@ -1,0 +1,16 @@
+﻿config/backlog-sync-env.ps1
+logs/
+output/
+.venv-sync/
+__pycache__/
+*.pyc
+scripts/*.bak-*
+scripts/*.dryrun-test
+scripts/*.mapping-test
+scripts/*.priority-real-test
+scripts/*.assignee-real-test
+*.log
+*oauth-token*.json
+*client-secret*.json
+*service-account*.json
+.env
