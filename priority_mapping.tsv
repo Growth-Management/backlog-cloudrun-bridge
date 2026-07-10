@@ -1,0 +1,4 @@
+project_key	priority_name	priority_id	is_active
+ICESAO_GENTASK	高	2	TRUE
+ICESAO_GENTASK	中	3	TRUE
+ICESAO_GENTASK	低	4	TRUE
