@@ -1,8 +1,26 @@
 # backlog-sync-bridge
 
-Backlog and Google Sheets sync tools for a resident Windows PC inside the Backlog allowed-IP network.
+Backlog and Google Sheets sync tools for the resident Windows PC at `C:\backlog-sync` inside the Backlog allowed-IP network.
 
-This repository is intentionally local-run first. It is not a Cloud Run service and does not expose a public API. The spreadsheet is the handoff interface between operators, ChatGPT-assisted queue preparation, and the resident PC worker.
+This repository is local-run first. It is not a Cloud Run service and does not expose a public API. Google Sheets is the handoff interface between operators, ChatGPT-assisted queue preparation, and the resident PC worker.
+
+## Local Directory Shape
+
+The resident PC layout is:
+
+```text
+C:\backlog-sync\
+  .venv-sync\
+  config\
+  logs\
+  output\
+  scripts\
+  tools\
+  assignee_mapping.tsv
+  priority_mapping.tsv
+```
+
+Repository-managed source should live in `scripts/`, `tools/`, `config/`, `docs/`, and root reference files. Runtime output stays local and is ignored.
 
 ## What This Syncs
 
@@ -10,22 +28,6 @@ This repository is intentionally local-run first. It is not a Cloud Run service 
 - Google Sheets legacy `write_queue` -> Backlog writeback
 - Google Sheets standard `write_queue_v2` -> Backlog writeback
 - `IWTECH_SYSOP` source issues -> `write_queue_v2` `create_issue` rows for `ICESAO_GENTASK`
-
-## Runtime Shape
-
-```text
-Backlog API
-  ^
-  | allowed-IP resident Windows PC
-  |
-Google Sheets
-  - issues_snapshot
-  - write_queue
-  - write_queue_v2
-  - sync_issue_map
-  - sync_comment_map
-  - sync_error_log
-```
 
 ## Main Files
 
@@ -36,12 +38,13 @@ scripts/
   process_write_queue.py
   process_write_queue_v2.py
   prepare_iwtech_sysop_queue_v2.py
-scripts/windows/
-  backlog-sync-env.example.ps1
+tools/
   run-issues-snapshot-sync.ps1
   run-write-queue-processor.ps1
   run-write-queue-processor-v2.ps1
   run-iwtech-sysop-prequeue-v2.ps1
+config/
+  backlog-sync-env.example.ps1
 docs/
   issues-snapshot-sync.md
   windows-task-scheduler.md
@@ -51,21 +54,22 @@ docs/
 ## Local Setup
 
 ```powershell
+cd C:\backlog-sync
 python -m venv .venv-sync
 .\.venv-sync\Scripts\python.exe -m pip install -r requirements-sync.txt
-Copy-Item .\scripts\windows\backlog-sync-env.example.ps1 .\scripts\windows\backlog-sync-env.ps1
-notepad .\scripts\windows\backlog-sync-env.ps1
+Copy-Item .\config\backlog-sync-env.example.ps1 .\config\backlog-sync-env.ps1
+notepad .\config\backlog-sync-env.ps1
 ```
 
-Do not commit `backlog-sync-env.ps1`, OAuth tokens, API keys, or Google client secrets.
+Do not commit `config\backlog-sync-env.ps1`, OAuth tokens, API keys, Google client secrets, logs, or output files.
 
 ## Manual Runs
 
 ```powershell
-.\scripts\windows\run-issues-snapshot-sync.ps1
-.\scripts\windows\run-write-queue-processor.ps1 -DryRun
-.\scripts\windows\run-iwtech-sysop-prequeue-v2.ps1 -DryRun
-.\scripts\windows\run-write-queue-processor-v2.ps1 -DryRun
+.\tools\run-issues-snapshot-sync.ps1
+.\tools\run-write-queue-processor.ps1 -DryRun
+.\tools\run-iwtech-sysop-prequeue-v2.ps1 -DryRun
+.\tools\run-write-queue-processor-v2.ps1 -DryRun
 ```
 
 ## Operation Docs
