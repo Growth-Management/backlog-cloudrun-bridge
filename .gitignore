@@ -1,7 +1,8 @@
 # Local environment files and credentials
-scripts/windows/backlog-sync-env.ps1
+config/backlog-sync-env.ps1
 *.log
 logs/
+output/
 .venv/
 .venv-sync/
 __pycache__/
