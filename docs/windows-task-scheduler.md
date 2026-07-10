@@ -1,13 +1,14 @@
 # Windows Task Scheduler Setup
 
-Backlog allowed-IP resident PC tasks for `backlog-sync-bridge`.
+Backlog allowed-IP resident PC tasks for `C:\backlog-sync`.
 
 ## Files
 
 ```text
-scripts/windows/
+config/
   backlog-sync-env.example.ps1
   backlog-sync-env.ps1        # local only, contains secrets
+tools/
   run-issues-snapshot-sync.ps1
   run-write-queue-processor.ps1
   run-write-queue-processor-v2.ps1
@@ -17,9 +18,9 @@ scripts/windows/
 ## Setup
 
 ```powershell
-$RepoRoot = "C:\Users\sinohara\backlog-sync-bridge"
-Copy-Item "$RepoRoot\scripts\windows\backlog-sync-env.example.ps1" "$RepoRoot\scripts\windows\backlog-sync-env.ps1"
-notepad "$RepoRoot\scripts\windows\backlog-sync-env.ps1"
+$RepoRoot = "C:\backlog-sync"
+Copy-Item "$RepoRoot\config\backlog-sync-env.example.ps1" "$RepoRoot\config\backlog-sync-env.ps1"
+notepad "$RepoRoot\config\backlog-sync-env.ps1"
 ```
 
 Set real values for:
@@ -37,17 +38,18 @@ $env:BACKLOG_DEFAULT_ASSIGNEE_ID = "115000"
 ## Manual Verification
 
 ```powershell
-.\scripts\windows\run-issues-snapshot-sync.ps1
-.\scripts\windows\run-write-queue-processor.ps1 -DryRun
-.\scripts\windows\run-iwtech-sysop-prequeue-v2.ps1 -DryRun
-.\scripts\windows\run-write-queue-processor-v2.ps1 -DryRun
+cd C:\backlog-sync
+.\tools\run-issues-snapshot-sync.ps1
+.\tools\run-write-queue-processor.ps1 -DryRun
+.\tools\run-iwtech-sysop-prequeue-v2.ps1 -DryRun
+.\tools\run-write-queue-processor-v2.ps1 -DryRun
 ```
 
 For a controlled IWTECH_SYSOP test, limit the source issue set first:
 
 ```powershell
 $env:SOURCE_ISSUE_KEYS = "IWTECH_SYSOP-1"
-.\scripts\windows\run-iwtech-sysop-prequeue-v2.ps1 -DryRun
+.\tools\run-iwtech-sysop-prequeue-v2.ps1 -DryRun
 ```
 
 ## Suggested Tasks
@@ -60,29 +62,29 @@ Initial frequency:
 - `write_queue_v2`: every 15 minutes
 
 ```powershell
-$RepoRoot = "C:\Users\sinohara\backlog-sync-bridge"
+$RepoRoot = "C:\backlog-sync"
 $PowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
 
-schtasks /Create /F /SC MINUTE /MO 30 /TN "Backlog Issues Snapshot Sync" /TR "`"$PowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$RepoRoot\scripts\windows\run-issues-snapshot-sync.ps1`" -RepoRoot `"$RepoRoot`"" /ST 09:00
+schtasks /Create /F /SC MINUTE /MO 30 /TN "Backlog Issues Snapshot Sync" /TR "`"$PowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$RepoRoot\tools\run-issues-snapshot-sync.ps1`" -RepoRoot `"$RepoRoot`"" /ST 09:00
 
-schtasks /Create /F /SC MINUTE /MO 5 /TN "Backlog Write Queue Processor" /TR "`"$PowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$RepoRoot\scripts\windows\run-write-queue-processor.ps1`" -RepoRoot `"$RepoRoot`"" /ST 09:00
+schtasks /Create /F /SC MINUTE /MO 5 /TN "Backlog Write Queue Processor" /TR "`"$PowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$RepoRoot\tools\run-write-queue-processor.ps1`" -RepoRoot `"$RepoRoot`"" /ST 09:00
 
-schtasks /Create /F /SC MINUTE /MO 15 /TN "Backlog IWTECH SYSOP Prequeue V2" /TR "`"$PowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$RepoRoot\scripts\windows\run-iwtech-sysop-prequeue-v2.ps1`" -RepoRoot `"$RepoRoot`"" /ST 09:00
+schtasks /Create /F /SC MINUTE /MO 15 /TN "Backlog IWTECH SYSOP Prequeue V2" /TR "`"$PowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$RepoRoot\tools\run-iwtech-sysop-prequeue-v2.ps1`" -RepoRoot `"$RepoRoot`"" /ST 09:00
 
-schtasks /Create /F /SC MINUTE /MO 15 /TN "Backlog Write Queue V2 Processor" /TR "`"$PowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$RepoRoot\scripts\windows\run-write-queue-processor-v2.ps1`" -RepoRoot `"$RepoRoot`"" /ST 09:00
+schtasks /Create /F /SC MINUTE /MO 15 /TN "Backlog Write Queue V2 Processor" /TR "`"$PowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$RepoRoot\tools\run-write-queue-processor-v2.ps1`" -RepoRoot `"$RepoRoot`"" /ST 09:00
 ```
 
 ## Logs
 
 ```powershell
-Get-ChildItem C:\Users\sinohara\backlog-sync-bridge\logs | Sort-Object LastWriteTime -Descending | Select-Object -First 10
-Get-Content C:\Users\sinohara\backlog-sync-bridge\logs\write_queue_v2-*.log -Tail 20
-Get-Content C:\Users\sinohara\backlog-sync-bridge\logs\iwtech-sysop-prequeue-v2-*.log -Tail 20
+Get-ChildItem C:\backlog-sync\logs | Sort-Object LastWriteTime -Descending | Select-Object -First 10
+Get-Content C:\backlog-sync\logs\write_queue_v2-*.log -Tail 20
+Get-Content C:\backlog-sync\logs\iwtech-sysop-prequeue-v2-*.log -Tail 20
 ```
 
 ## Safety Notes
 
-- `backlog-sync-env.ps1` stays local and must not be committed.
+- `config\backlog-sync-env.ps1` stays local and must not be committed.
 - Keep OAuth tokens and Backlog API keys outside the repository when possible.
 - Legacy `write_queue` processes `approval_status=approved` and `execution_status=queued`.
 - `write_queue_v2` processes `status=queued`.
