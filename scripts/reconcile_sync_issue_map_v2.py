@@ -10,12 +10,6 @@ from scripts.process_write_queue_v2 import HEADERS
 from scripts.prepare_iwtech_sysop_queue_v2 import SYNC_ISSUE_MAP_HEADERS
 
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
-RESULT_COLUMNS = [
-    "target_issue_key", "target_issue_id", "target_issue_url", "last_issue_synced_at",
-    "sync_status", "last_error_code", "last_error_message", "note",
-]
-
-
 @dataclass(frozen=True)
 class Settings:
     spreadsheet_id: str
@@ -76,14 +70,14 @@ def read_rows(service, s: Settings, sheet_name: str, headers: list[str]) -> list
     return rows
 
 
-def update_sync_map_result(service, s: Settings, row_no: int, values: list[str]) -> None:
-    start = col(SYNC_ISSUE_MAP_HEADERS.index(RESULT_COLUMNS[0]) + 1)
-    end = col(SYNC_ISSUE_MAP_HEADERS.index(RESULT_COLUMNS[-1]) + 1)
+def update_sync_map_result(service, s: Settings, row_no: int, row: dict[str, str], updates: dict[str, str]) -> None:
+    merged = dict(row)
+    merged.update(updates)
     service.spreadsheets().values().update(
         spreadsheetId=s.spreadsheet_id,
-        range=f"{s.sync_issue_map_sheet_name}!{start}{row_no}:{end}{row_no}",
+        range=f"{s.sync_issue_map_sheet_name}!A{row_no}:{col(len(SYNC_ISSUE_MAP_HEADERS))}{row_no}",
         valueInputOption="RAW",
-        body={"values": [values]},
+        body={"values": [[merged.get(header, "") for header in SYNC_ISSUE_MAP_HEADERS]]},
     ).execute()
 
 
@@ -128,24 +122,50 @@ def main() -> None:
             continue
 
         queue_status = queue_row.get("status", "")
-        values = None
+        updates = None
         if queue_status == "succeeded":
             issue_key, issue_id = parse_created_issue(queue_row.get("result_summary", ""))
             if not issue_key:
-                values = ["", "", "", "", "on_hold", "TARGET_ISSUE_KEY_NOT_FOUND", "Could not parse created issue key from result_summary", "check write_queue_v2 result_summary"]
+                updates = {
+                    "sync_status": "on_hold",
+                    "last_error_code": "TARGET_ISSUE_KEY_NOT_FOUND",
+                    "last_error_message": "Could not parse created issue key from result_summary",
+                    "note": "check write_queue_v2 result_summary",
+                }
             else:
-                values = [issue_key, issue_id, issue_url(s.backlog_base_url, issue_key), now, "created", "", "", "create_issue result reconciled"]
+                updates = {
+                    "target_issue_key": issue_key,
+                    "target_issue_id": issue_id,
+                    "target_issue_url": issue_url(s.backlog_base_url, issue_key),
+                    "last_issue_synced_at": now,
+                    "sync_status": "created",
+                    "last_error_code": "",
+                    "last_error_message": "",
+                    "note": "create_issue result reconciled",
+                }
         elif queue_status == "failed":
-            values = ["", "", "", now, "create_failed", queue_row.get("last_error_code", ""), queue_row.get("last_error_message", ""), "create_issue queue failed"]
+            updates = {
+                "last_issue_synced_at": now,
+                "sync_status": "create_failed",
+                "last_error_code": queue_row.get("last_error_code", ""),
+                "last_error_message": queue_row.get("last_error_message", ""),
+                "note": "create_issue queue failed",
+            }
         elif queue_status == "on_hold":
-            values = ["", "", "", now, "create_on_hold", queue_row.get("last_error_code", ""), queue_row.get("last_error_message", ""), "create_issue queue is on_hold"]
+            updates = {
+                "last_issue_synced_at": now,
+                "sync_status": "create_on_hold",
+                "last_error_code": queue_row.get("last_error_code", ""),
+                "last_error_message": queue_row.get("last_error_message", ""),
+                "note": "create_issue queue is on_hold",
+            }
 
-        if values is None:
+        if updates is None:
             continue
         if s.dry_run:
-            dry_run_events.append({"row_no": row_no, "create_queue_id": queue_id, "values": values})
+            dry_run_events.append({"row_no": row_no, "create_queue_id": queue_id, "updates": updates})
         else:
-            update_sync_map_result(service, s, row_no, values)
+            update_sync_map_result(service, s, row_no, row, updates)
         updated += 1
 
     print(json.dumps({"status": "ok", "updated": updated, "dry_run": s.dry_run, "events": dry_run_events}, ensure_ascii=False))
