@@ -21,4 +21,5 @@ jobs:
             scripts/process_write_queue.py \
             scripts/process_write_queue_v2.py \
             scripts/prepare_iwtech_sysop_queue_v2.py \
+            scripts/prepare_iwtech_sysop_comment_queue_v2.py \
             scripts/reconcile_sync_issue_map_v2.py
