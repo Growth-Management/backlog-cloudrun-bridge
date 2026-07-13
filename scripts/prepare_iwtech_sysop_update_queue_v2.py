@@ -158,6 +158,16 @@ def nested_name(data: dict[str, Any], key: str) -> str:
     return ""
 
 
+def is_source_issue_after_cursor(issue: dict[str, Any], map_row: dict[str, str]) -> bool:
+    updated = str(issue.get("updated") or "").strip()
+    cursor = str(map_row.get("last_issue_synced_at") or "").strip()
+    if not cursor:
+        return True
+    if not updated:
+        return False
+    return updated > cursor
+
+
 def build_assignee_row(s: Settings, map_row: dict[str, str], sequence: int) -> list[str]:
     now = datetime.now(UTC).isoformat()
     source_issue_key = map_row["source_issue_key"]
@@ -310,45 +320,51 @@ def main() -> None:
 
         if s.sync_status:
             issue = issue or source_issue(s, source_issue_key)
-            status_name = nested_name(issue, "status")
-            idempotency_key = f"sync_status:{source_issue_key}:{target_issue_key}:{status_name}"
-            if not status_name:
-                skipped += 1
-            elif idempotency_key in idempotency_keys:
+            if not is_source_issue_after_cursor(issue, map_row):
                 skipped += 1
             else:
-                sequence += 1
-                row = build_status_row(s, map_row, issue, sequence)
-                if row is None:
+                status_name = nested_name(issue, "status")
+                idempotency_key = f"sync_status:{source_issue_key}:{target_issue_key}:{status_name}"
+                if not status_name:
                     skipped += 1
-                    continue
-                if s.dry_run:
-                    print(json.dumps({"queue_row": row}, ensure_ascii=False))
+                elif idempotency_key in idempotency_keys:
+                    skipped += 1
                 else:
-                    queue_appends.append(row)
-                idempotency_keys.add(idempotency_key)
-                status_rows += 1
+                    sequence += 1
+                    row = build_status_row(s, map_row, issue, sequence)
+                    if row is None:
+                        skipped += 1
+                        continue
+                    if s.dry_run:
+                        print(json.dumps({"queue_row": row}, ensure_ascii=False))
+                    else:
+                        queue_appends.append(row)
+                    idempotency_keys.add(idempotency_key)
+                    status_rows += 1
 
         if s.sync_due_date:
             issue = issue or source_issue(s, source_issue_key)
-            due_date = normalize_due_date(issue.get("dueDate"))
-            idempotency_key = f"sync_due_date:{source_issue_key}:{target_issue_key}:{due_date}"
-            if not due_date:
-                skipped += 1
-            elif idempotency_key in idempotency_keys:
+            if not is_source_issue_after_cursor(issue, map_row):
                 skipped += 1
             else:
-                sequence += 1
-                row = build_due_date_row(s, map_row, issue, sequence)
-                if row is None:
+                due_date = normalize_due_date(issue.get("dueDate"))
+                idempotency_key = f"sync_due_date:{source_issue_key}:{target_issue_key}:{due_date}"
+                if not due_date:
                     skipped += 1
-                    continue
-                if s.dry_run:
-                    print(json.dumps({"queue_row": row}, ensure_ascii=False))
+                elif idempotency_key in idempotency_keys:
+                    skipped += 1
                 else:
-                    queue_appends.append(row)
-                idempotency_keys.add(idempotency_key)
-                due_date_rows += 1
+                    sequence += 1
+                    row = build_due_date_row(s, map_row, issue, sequence)
+                    if row is None:
+                        skipped += 1
+                        continue
+                    if s.dry_run:
+                        print(json.dumps({"queue_row": row}, ensure_ascii=False))
+                    else:
+                        queue_appends.append(row)
+                    idempotency_keys.add(idempotency_key)
+                    due_date_rows += 1
 
     if not s.dry_run:
         append_rows(service, s, s.queue_sheet_name, queue_appends)
