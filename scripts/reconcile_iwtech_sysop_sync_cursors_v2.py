@@ -122,9 +122,10 @@ def parse_payload(row: dict[str, str]) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def successful_cursor_sources(queue_rows: list[tuple[int, dict[str, str]]]) -> tuple[dict[str, str], set[str]]:
+def successful_cursor_sources(queue_rows: list[tuple[int, dict[str, str]]]) -> tuple[dict[str, str], dict[str, str], set[str]]:
     comment_cursors: dict[str, str] = {}
-    issue_cursor_sources: set[str] = set()
+    issue_cursors: dict[str, str] = {}
+    issue_cursor_sources_missing_payload: set[str] = set()
     for _, row in queue_rows:
         if row.get("status") != "succeeded":
             continue
@@ -139,8 +140,13 @@ def successful_cursor_sources(queue_rows: list[tuple[int, dict[str, str]]]) -> t
             if created and created > comment_cursors.get(source_issue_key, ""):
                 comment_cursors[source_issue_key] = created
         elif operation in SOURCE_DRIVEN_OPERATIONS:
-            issue_cursor_sources.add(source_issue_key)
-    return comment_cursors, issue_cursor_sources
+            updated = str(payload.get("source_issue_updated_at") or "").strip()
+            if updated:
+                if updated > issue_cursors.get(source_issue_key, ""):
+                    issue_cursors[source_issue_key] = updated
+            else:
+                issue_cursor_sources_missing_payload.add(source_issue_key)
+    return comment_cursors, issue_cursors, issue_cursor_sources_missing_payload
 
 
 def backlog_get(s: Settings, path: str, params: dict[str, Any] | None = None) -> Any:
@@ -186,12 +192,12 @@ def main() -> None:
     ensure_sync_map_headers(service, s)
 
     queue_rows = read_rows(service, s, s.queue_sheet_name, HEADERS)
-    comment_cursors, issue_cursor_sources = successful_cursor_sources(queue_rows)
+    comment_cursors, issue_cursors, issue_cursor_sources_missing_payload = successful_cursor_sources(queue_rows)
 
-    issue_cursors = {
-        source_issue_key: source_issue_updated_at(s, source_issue_key)
-        for source_issue_key in sorted(issue_cursor_sources)
-    }
+    for source_issue_key in sorted(issue_cursor_sources_missing_payload):
+        updated = source_issue_updated_at(s, source_issue_key)
+        if updated and updated > issue_cursors.get(source_issue_key, ""):
+            issue_cursors[source_issue_key] = updated
 
     updated = 0
     dry_run_events = []
