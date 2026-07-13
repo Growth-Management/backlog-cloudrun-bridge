@@ -52,6 +52,8 @@ tools/
   run-iwtech-sysop-update-prequeue-v2.ps1
   run-reconcile-iwtech-sysop-cursors-v2.ps1
   run-iwtech-sysop-delta-sync-v2.ps1
+  register-iwtech-sysop-delta-sync-task.ps1
+  unregister-iwtech-sysop-delta-sync-task.ps1
   check-write-queue-v2-status.ps1
   check-sync-issue-map-v2.ps1
 config/
@@ -98,6 +100,27 @@ For a small controlled batch, set the worker limit:
 
 ```powershell
 .\tools\run-iwtech-sysop-delta-sync-v2.ps1 -WriteQueueMaxRows 5
+```
+
+## Windows Task Scheduler
+
+Register the normal IWTECH_SYSOP delta sync as the current Windows user. The task runs only when that user is logged on, which keeps Google OAuth token access aligned with the resident PC setup.
+
+```powershell
+.\tools\register-iwtech-sysop-delta-sync-task.ps1 -DailyAt 08:30 -WriteQueueMaxRows 20
+```
+
+Replace an existing task or start it immediately:
+
+```powershell
+.\tools\register-iwtech-sysop-delta-sync-task.ps1 -DailyAt 08:30 -WriteQueueMaxRows 20 -Force
+.\tools\register-iwtech-sysop-delta-sync-task.ps1 -DailyAt 08:30 -WriteQueueMaxRows 20 -Force -RunNow
+```
+
+Remove the task:
+
+```powershell
+.\tools\unregister-iwtech-sysop-delta-sync-task.ps1
 ```
 
 ## Daily Checks
