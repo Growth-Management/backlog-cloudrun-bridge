@@ -12,7 +12,11 @@ tools/
   run-issues-snapshot-sync.ps1
   run-write-queue-processor.ps1
   run-write-queue-processor-v2.ps1
-  run-iwtech-sysop-prequeue-v2.ps1
+  run-iwtech-sysop-delta-sync-v2.ps1
+  register-iwtech-sysop-delta-sync-task.ps1
+  unregister-iwtech-sysop-delta-sync-task.ps1
+  check-write-queue-v2-status.ps1
+  check-sync-issue-map-v2.ps1
 ```
 
 ## Setup
@@ -37,55 +41,101 @@ $env:BACKLOG_DEFAULT_ASSIGNEE_ID = "115000"
 
 ## Manual Verification
 
+Run these before registering the scheduled task:
+
 ```powershell
 cd C:\backlog-sync
-.\tools\run-issues-snapshot-sync.ps1
-.\tools\run-write-queue-processor.ps1 -DryRun
-.\tools\run-iwtech-sysop-prequeue-v2.ps1 -DryRun
-.\tools\run-write-queue-processor-v2.ps1 -DryRun
+.\tools\check-write-queue-v2-status.ps1
+.\tools\check-sync-issue-map-v2.ps1
+.\tools\run-iwtech-sysop-delta-sync-v2.ps1 -DryRun
 ```
 
-For a controlled IWTECH_SYSOP test, limit the source issue set first:
+If the dry-run output is safe, run one real delta pass manually:
 
 ```powershell
-$env:SOURCE_ISSUE_KEYS = "IWTECH_SYSOP-1"
-.\tools\run-iwtech-sysop-prequeue-v2.ps1 -DryRun
+.\tools\run-iwtech-sysop-delta-sync-v2.ps1 -WriteQueueMaxRows 5
 ```
 
-## Suggested Tasks
+Increase `-WriteQueueMaxRows` after confirming the first scheduled run behavior.
 
-Initial frequency:
+## Register IWTECH_SYSOP Delta Sync
 
-- `issues_snapshot`: every 30 minutes
-- legacy `write_queue`: every 5 minutes
-- `IWTECH_SYSOP` pre-queue: every 15 minutes
-- `write_queue_v2`: every 15 minutes
+The registration script creates this task:
+
+- Task path: `\BacklogSync\`
+- Task name: `Backlog IWTECH_SYSOP Delta Sync v2`
+- Action: `tools\run-iwtech-sysop-delta-sync-v2.ps1`
+- Principal: current Windows user, interactive logon
+- Multiple instances: ignore new runs while one is still running
+- Execution time limit: 2 hours
+
+Register a daily task:
 
 ```powershell
-$RepoRoot = "C:\backlog-sync"
-$PowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+cd C:\backlog-sync
+.\tools\register-iwtech-sysop-delta-sync-task.ps1 -DailyAt 08:30 -WriteQueueMaxRows 20
+```
 
-schtasks /Create /F /SC MINUTE /MO 30 /TN "Backlog Issues Snapshot Sync" /TR "`"$PowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$RepoRoot\tools\run-issues-snapshot-sync.ps1`" -RepoRoot `"$RepoRoot`"" /ST 09:00
+Replace an existing task:
 
-schtasks /Create /F /SC MINUTE /MO 5 /TN "Backlog Write Queue Processor" /TR "`"$PowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$RepoRoot\tools\run-write-queue-processor.ps1`" -RepoRoot `"$RepoRoot`"" /ST 09:00
+```powershell
+.\tools\register-iwtech-sysop-delta-sync-task.ps1 -DailyAt 08:30 -WriteQueueMaxRows 20 -Force
+```
 
-schtasks /Create /F /SC MINUTE /MO 15 /TN "Backlog IWTECH SYSOP Prequeue V2" /TR "`"$PowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$RepoRoot\tools\run-iwtech-sysop-prequeue-v2.ps1`" -RepoRoot `"$RepoRoot`"" /ST 09:00
+Register and start immediately:
 
-schtasks /Create /F /SC MINUTE /MO 15 /TN "Backlog Write Queue V2 Processor" /TR "`"$PowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$RepoRoot\tools\run-write-queue-processor-v2.ps1`" -RepoRoot `"$RepoRoot`"" /ST 09:00
+```powershell
+.\tools\register-iwtech-sysop-delta-sync-task.ps1 -DailyAt 08:30 -WriteQueueMaxRows 20 -Force -RunNow
+```
+
+Unregister:
+
+```powershell
+.\tools\unregister-iwtech-sysop-delta-sync-task.ps1
+```
+
+## Verify Scheduled Task
+
+```powershell
+Get-ScheduledTask -TaskPath "\BacklogSync\" -TaskName "Backlog IWTECH_SYSOP Delta Sync v2"
+Get-ScheduledTaskInfo -TaskPath "\BacklogSync\" -TaskName "Backlog IWTECH_SYSOP Delta Sync v2"
+```
+
+Start manually from Task Scheduler:
+
+```powershell
+Start-ScheduledTask -TaskPath "\BacklogSync\" -TaskName "Backlog IWTECH_SYSOP Delta Sync v2"
 ```
 
 ## Logs
 
 ```powershell
 Get-ChildItem C:\backlog-sync\logs | Sort-Object LastWriteTime -Descending | Select-Object -First 10
-Get-Content C:\backlog-sync\logs\write_queue_v2-*.log -Tail 20
-Get-Content C:\backlog-sync\logs\iwtech-sysop-prequeue-v2-*.log -Tail 20
+Get-Content C:\backlog-sync\logs\iwtech-sysop-delta-sync-v2-*.log -Tail 80
 ```
+
+A healthy delta run ends with both checks:
+
+```text
+"status": "ok"
+"warning_count": 0
+```
+
+## Suggested Operating Rhythm
+
+Initial production rhythm:
+
+- Daily IWTECH_SYSOP delta sync at 08:30
+- Manual `check-write-queue-v2-status.ps1` after the first few scheduled runs
+- Increase `WriteQueueMaxRows` only after queue volume and run time are stable
+
+If near-real-time syncing is needed later, add a second scheduled task at another time or move to a repeated trigger after confirming API and Sheets quota behavior.
 
 ## Safety Notes
 
 - `config\backlog-sync-env.ps1` stays local and must not be committed.
 - Keep OAuth tokens and Backlog API keys outside the repository when possible.
-- Legacy `write_queue` processes `approval_status=approved` and `execution_status=queued`.
+- The combined runner skips the write queue processor in dry-run mode.
 - `write_queue_v2` processes `status=queued`.
 - v2 must keep `request_payload_json`, `idempotency_key`, `status`, and `retry_count`.
+- The scheduled task runs as the current Windows user because Google OAuth token access is user-scoped.
