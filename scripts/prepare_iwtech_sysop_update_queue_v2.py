@@ -213,6 +213,7 @@ def build_due_date_row(s: Settings, map_row: dict[str, str], issue: dict[str, An
         "due_date": due_date,
         "source_project_key": s.source_project_key,
         "source_issue_key": source_issue_key,
+        "source_issue_updated_at": issue.get("updated") or "",
     }
     row = {
         "queue_id": queue_id,
@@ -247,6 +248,7 @@ def build_status_row(s: Settings, map_row: dict[str, str], issue: dict[str, Any]
         "new_status_name": status_name,
         "source_project_key": s.source_project_key,
         "source_issue_key": source_issue_key,
+        "source_issue_updated_at": issue.get("updated") or "",
     }
     row = {
         "queue_id": queue_id,
