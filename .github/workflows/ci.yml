@@ -24,4 +24,6 @@ jobs:
             scripts/prepare_iwtech_sysop_comment_queue_v2.py \
             scripts/prepare_iwtech_sysop_update_queue_v2.py \
             scripts/reconcile_sync_issue_map_v2.py \
-            scripts/reconcile_iwtech_sysop_sync_cursors_v2.py
+            scripts/reconcile_iwtech_sysop_sync_cursors_v2.py \
+            scripts/check_write_queue_v2_status.py \
+            scripts/check_sync_issue_map_v2.py
