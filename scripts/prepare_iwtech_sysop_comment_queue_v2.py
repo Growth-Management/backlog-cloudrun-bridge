@@ -124,6 +124,16 @@ def source_comments(s: Settings, source_issue_key: str) -> list[dict[str, Any]]:
     return [comment for comment in comments if isinstance(comment, dict)]
 
 
+def is_after_cursor(value: Any, cursor: str) -> bool:
+    text = str(value or "").strip()
+    cursor_text = str(cursor or "").strip()
+    if not cursor_text:
+        return True
+    if not text:
+        return False
+    return text > cursor_text
+
+
 def eligible_map_rows(s: Settings, rows: list[dict[str, str]]) -> list[dict[str, str]]:
     explicit_keys = {key.strip() for key in os.getenv("SOURCE_ISSUE_KEYS", "").split(",") if key.strip()}
     selected = []
@@ -250,6 +260,9 @@ def main() -> None:
         for comment in source_comments(s, map_row["source_issue_key"]):
             comment_id = str(comment.get("id") or "")
             content = str(comment.get("content") or "").strip()
+            if not is_after_cursor(comment.get("created"), map_row.get("last_comment_synced_at", "")):
+                skipped += 1
+                continue
             if not comment_id or not content:
                 skipped += 1
                 continue
