@@ -29,6 +29,7 @@ class Settings:
     source_project_key: str
     target_project_key: str
     fixed_assignee_name: str
+    sync_status: bool
     sync_due_date: bool
     requested_by: str
     max_issues: int
@@ -57,6 +58,7 @@ def settings() -> Settings:
         source_project_key=os.getenv("SOURCE_PROJECT_KEY", "IWTECH_SYSOP"),
         target_project_key=os.getenv("TARGET_PROJECT_KEY", "ICESAO_GENTASK"),
         fixed_assignee_name=os.getenv("SYNC_FIXED_ASSIGNEE_NAME", "").strip(),
+        sync_status=os.getenv("SYNC_STATUS", "true").lower() in ("1", "true", "yes"),
         sync_due_date=os.getenv("SYNC_DUE_DATE", "true").lower() in ("1", "true", "yes"),
         requested_by=os.getenv("SYNC_REQUESTED_BY", "iwtech-sysop-sync"),
         max_issues=int(os.getenv("SYNC_MAX_ISSUES", "20")),
@@ -149,6 +151,13 @@ def normalize_due_date(value: Any) -> str:
     return text[:10]
 
 
+def nested_name(data: dict[str, Any], key: str) -> str:
+    value = data.get(key)
+    if isinstance(value, dict):
+        return str(value.get("name") or "")
+    return ""
+
+
 def build_assignee_row(s: Settings, map_row: dict[str, str], sequence: int) -> list[str]:
     now = datetime.now(UTC).isoformat()
     source_issue_key = map_row["source_issue_key"]
@@ -214,6 +223,40 @@ def build_due_date_row(s: Settings, map_row: dict[str, str], issue: dict[str, An
     return [row.get(header, "") for header in HEADERS]
 
 
+def build_status_row(s: Settings, map_row: dict[str, str], issue: dict[str, Any], sequence: int) -> list[str] | None:
+    status_name = nested_name(issue, "status")
+    if not status_name:
+        return None
+    now = datetime.now(UTC).isoformat()
+    source_issue_key = map_row["source_issue_key"]
+    target_issue_key = map_row["target_issue_key"]
+    queue_id = build_queue_id("STATUS", sequence)
+    payload = {
+        "action": "change_status",
+        "target_issue_key": target_issue_key,
+        "new_status_name": status_name,
+        "source_project_key": s.source_project_key,
+        "source_issue_key": source_issue_key,
+    }
+    row = {
+        "queue_id": queue_id,
+        "requested_at": now,
+        "requested_by": s.requested_by,
+        "request_source": "IWTECH_SYSOP update sync",
+        "project_key": s.target_project_key,
+        "operation_type": "change_status",
+        "target_issue_key": target_issue_key,
+        "new_status_name": status_name,
+        "request_payload_json": json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        "idempotency_key": f"sync_status:{source_issue_key}:{target_issue_key}:{status_name}",
+        "status": "queued",
+        "retry_count": "0",
+        "raw_request_text": f"sync status {status_name} to {target_issue_key}",
+        "note": "created by IWTECH_SYSOP update pre-queue job",
+    }
+    return [row.get(header, "") for header in HEADERS]
+
+
 def build_queue_id(kind: str, sequence: int) -> str:
     timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     suffix = hashlib.sha1(f"{kind}:{timestamp}:{sequence}".encode("utf-8")).hexdigest()[:6]
@@ -241,6 +284,7 @@ def main() -> None:
 
     queue_appends: list[list[str]] = []
     assignee_rows = 0
+    status_rows = 0
     due_date_rows = 0
     skipped = 0
     sequence = 0
@@ -248,6 +292,7 @@ def main() -> None:
     for map_row in eligible_map_rows(s, map_rows):
         source_issue_key = map_row["source_issue_key"]
         target_issue_key = map_row["target_issue_key"]
+        issue = None
 
         if s.fixed_assignee_name:
             idempotency_key = f"sync_assignee:{source_issue_key}:{target_issue_key}:{s.fixed_assignee_name}"
@@ -263,8 +308,29 @@ def main() -> None:
                 idempotency_keys.add(idempotency_key)
                 assignee_rows += 1
 
+        if s.sync_status:
+            issue = issue or source_issue(s, source_issue_key)
+            status_name = nested_name(issue, "status")
+            idempotency_key = f"sync_status:{source_issue_key}:{target_issue_key}:{status_name}"
+            if not status_name:
+                skipped += 1
+            elif idempotency_key in idempotency_keys:
+                skipped += 1
+            else:
+                sequence += 1
+                row = build_status_row(s, map_row, issue, sequence)
+                if row is None:
+                    skipped += 1
+                    continue
+                if s.dry_run:
+                    print(json.dumps({"queue_row": row}, ensure_ascii=False))
+                else:
+                    queue_appends.append(row)
+                idempotency_keys.add(idempotency_key)
+                status_rows += 1
+
         if s.sync_due_date:
-            issue = source_issue(s, source_issue_key)
+            issue = issue or source_issue(s, source_issue_key)
             due_date = normalize_due_date(issue.get("dueDate"))
             idempotency_key = f"sync_due_date:{source_issue_key}:{target_issue_key}:{due_date}"
             if not due_date:
@@ -290,6 +356,7 @@ def main() -> None:
     print(json.dumps({
         "status": "ok",
         "prepared_assignee_rows": assignee_rows,
+        "prepared_status_rows": status_rows,
         "prepared_due_date_rows": due_date_rows,
         "skipped": skipped,
         "dry_run": s.dry_run,
