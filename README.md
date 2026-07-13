@@ -38,11 +38,22 @@ scripts/
   process_write_queue.py
   process_write_queue_v2.py
   prepare_iwtech_sysop_queue_v2.py
+  prepare_iwtech_sysop_comment_queue_v2.py
+  prepare_iwtech_sysop_update_queue_v2.py
+  reconcile_iwtech_sysop_sync_cursors_v2.py
+  check_write_queue_v2_status.py
+  check_sync_issue_map_v2.py
 tools/
   run-issues-snapshot-sync.ps1
   run-write-queue-processor.ps1
   run-write-queue-processor-v2.ps1
   run-iwtech-sysop-prequeue-v2.ps1
+  run-iwtech-sysop-comment-prequeue-v2.ps1
+  run-iwtech-sysop-update-prequeue-v2.ps1
+  run-reconcile-iwtech-sysop-cursors-v2.ps1
+  run-iwtech-sysop-delta-sync-v2.ps1
+  check-write-queue-v2-status.ps1
+  check-sync-issue-map-v2.ps1
 config/
   backlog-sync-env.example.ps1
 docs/
@@ -71,6 +82,32 @@ Do not commit `config\backlog-sync-env.ps1`, OAuth tokens, API keys, Google clie
 .\tools\run-iwtech-sysop-prequeue-v2.ps1 -DryRun
 .\tools\run-write-queue-processor-v2.ps1 -DryRun
 ```
+
+## IWTECH_SYSOP Delta Sync
+
+Use the combined runner for normal delta operation after the initial create/comment/update sync has been reconciled.
+
+```powershell
+.\tools\run-iwtech-sysop-delta-sync-v2.ps1 -DryRun
+.\tools\run-iwtech-sysop-delta-sync-v2.ps1
+```
+
+The dry-run mode runs the pre-queue and check steps but skips the write queue processor so existing `queued` rows are not changed to `validated` by accident.
+
+For a small controlled batch, set the worker limit:
+
+```powershell
+.\tools\run-iwtech-sysop-delta-sync-v2.ps1 -WriteQueueMaxRows 5
+```
+
+## Daily Checks
+
+```powershell
+.\tools\check-write-queue-v2-status.ps1
+.\tools\check-sync-issue-map-v2.ps1
+```
+
+`check-write-queue-v2-status.ps1` reports `queued`, `processing`, `failed`, and `on_hold` rows that need attention. `check-sync-issue-map-v2.ps1` reports map inconsistencies such as duplicate source/target issue keys or created rows without a target issue key.
 
 ## Operation Docs
 
