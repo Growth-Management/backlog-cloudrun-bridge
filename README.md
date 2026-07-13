@@ -94,7 +94,7 @@ Use the combined runner for normal delta operation after the initial create/comm
 .\tools\run-iwtech-sysop-delta-sync-v2.ps1
 ```
 
-The dry-run mode runs the pre-queue and check steps but skips the write queue processor so existing `queued` rows are not changed to `validated` by accident.
+The dry-run mode runs the pre-queue and check steps but skips the write queue processor and cursor reconciliation so existing rows and sync cursors are not changed by accident.
 
 For a small controlled batch, set the worker limit:
 
