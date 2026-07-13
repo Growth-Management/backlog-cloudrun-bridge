@@ -227,7 +227,7 @@ def mark_processing(service, s: Settings, row_no: int) -> None:
 
 def parse_payload(row: dict[str, str]) -> dict[str, str]:
     operation_type = row.get("operation_type", "").strip()
-    if operation_type not in ("add_comment", "change_status", "change_priority", "change_assignee", "create_issue"):
+    if operation_type not in ("add_comment", "change_status", "change_priority", "change_assignee", "change_due_date", "create_issue"):
         raise ValueError(f"Unsupported operation_type: {operation_type}")
 
     raw_payload = row.get("request_payload_json", "").strip()
@@ -289,6 +289,12 @@ def parse_payload(row: dict[str, str]) -> dict[str, str]:
         if not assignee_name:
             raise ValueError("assignee_name is required")
         return {"action": "change_assignee", "target_issue_key": issue_key, "assignee_name": assignee_name}
+
+    if operation_type == "change_due_date":
+        due_date = normalize_due_date(payload.get("due_date") or payload.get("dueDate") or row.get("due_date", ""))
+        if not due_date:
+            raise ValueError("due_date is required")
+        return {"action": "change_due_date", "target_issue_key": issue_key, "due_date": due_date}
 
     raise ValueError(f"Unsupported operation_type: {operation_type}")
 
@@ -378,6 +384,17 @@ def change_assignee(s: Settings, issue_key: str, assignee_id: str) -> dict[str, 
         res.raise_for_status()
         return res.json()
 
+
+def change_due_date(s: Settings, issue_key: str, due_date: str) -> dict[str, Any]:
+    with httpx.Client(base_url=s.backlog_base_url.rstrip("/"), timeout=s.timeout_seconds) as client:
+        res = client.patch(
+            f"/api/v2/issues/{issue_key}",
+            params={"apiKey": s.backlog_api_key},
+            data={"dueDate": due_date},
+        )
+        res.raise_for_status()
+        return res.json()
+
 def sanitize_error(message: str, api_key: str) -> str:
     sanitized = message
     if api_key:
@@ -452,6 +469,12 @@ def main() -> None:
                             f"dry_run: change_assignee validated: {payload['assignee_name']} ({assignee_id})",
                             "", s.worker_name,
                         ])
+                elif payload["action"] == "change_due_date":
+                    update_cells(service, s, row_no, [
+                        "validated", str(retry), "", "",
+                        f"dry_run: change_due_date validated: {payload['due_date']}",
+                        "", s.worker_name,
+                    ])
                 else:
                     update_cells(service, s, row_no, [
                         "validated", str(retry), "", "",
@@ -516,6 +539,13 @@ def main() -> None:
                         f"assignee changed: {payload['assignee_name']} ({assignee_id})",
                         datetime.now(UTC).isoformat(), s.worker_name,
                     ])
+            elif payload["action"] == "change_due_date":
+                response = change_due_date(s, payload["target_issue_key"], payload["due_date"])
+                update_cells(service, s, row_no, [
+                    "succeeded", str(retry), "", "",
+                    f"due_date changed: {payload['due_date']}",
+                    datetime.now(UTC).isoformat(), s.worker_name,
+                ])
         except Exception as exc:
             update_cells(service, s, row_no, [
                 "failed", str(retry + 1), "PROCESS_ERROR", sanitize_error(str(exc), s.backlog_api_key),
