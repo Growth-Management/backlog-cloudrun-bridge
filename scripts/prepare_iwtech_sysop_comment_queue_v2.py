@@ -92,13 +92,15 @@ def read_table(service, s: Settings, sheet_name: str, headers: list[str]) -> lis
     return rows
 
 
-def append_row(service, s: Settings, sheet_name: str, values: list[str]) -> None:
+def append_rows(service, s: Settings, sheet_name: str, rows: list[list[str]]) -> None:
+    if not rows:
+        return
     service.spreadsheets().values().append(
         spreadsheetId=s.spreadsheet_id,
         range=f"{sheet_name}!A:A",
         valueInputOption="RAW",
         insertDataOption="INSERT_ROWS",
-        body={"values": [values]},
+        body={"values": rows},
     ).execute()
 
 
@@ -243,6 +245,7 @@ def main() -> None:
     appended = 0
     skipped = 0
     scanned_comments = 0
+    queue_appends: list[list[str]] = []
     for map_row in eligible_map_rows(s, map_rows):
         for comment in source_comments(s, map_row["source_issue_key"]):
             comment_id = str(comment.get("id") or "")
@@ -259,9 +262,12 @@ def main() -> None:
             if s.dry_run:
                 print(json.dumps({"queue_row": queue_row}, ensure_ascii=False))
             else:
-                append_row(service, s, s.queue_sheet_name, queue_row)
+                queue_appends.append(queue_row)
             idempotency_keys.add(idempotency_key)
             appended += 1
+
+    if not s.dry_run:
+        append_rows(service, s, s.queue_sheet_name, queue_appends)
 
     print(json.dumps({
         "status": "ok",
