@@ -73,7 +73,12 @@ try {
     else {
         Invoke-Step "write_queue_processor" "scripts.process_write_queue_v2"
     }
-    Invoke-Step "cursor_reconcile" "scripts.reconcile_iwtech_sysop_sync_cursors_v2"
+    if ($DryRun) {
+        "step=cursor_reconcile skipped_for_dry_run=true" | Tee-Object -FilePath $LogFile -Append
+    }
+    else {
+        Invoke-Step "cursor_reconcile" "scripts.reconcile_iwtech_sysop_sync_cursors_v2"
+    }
     Invoke-Step "write_queue_status_check" "scripts.check_write_queue_v2_status"
     Invoke-Step "sync_issue_map_check" "scripts.check_sync_issue_map_v2"
 
