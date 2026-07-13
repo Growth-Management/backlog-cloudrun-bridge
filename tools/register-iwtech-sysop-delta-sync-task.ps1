@@ -43,7 +43,7 @@ if ($Existing -and $Force) {
 $ActionArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$Runner`" -WriteQueueMaxRows $WriteQueueMaxRows"
 $Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $ActionArgs -WorkingDirectory $Root
 $Trigger = New-ScheduledTaskTrigger -Daily -At $At
-$Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel LeastPrivilege
+$Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
 $Settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances IgnoreNew `
     -StartWhenAvailable `
