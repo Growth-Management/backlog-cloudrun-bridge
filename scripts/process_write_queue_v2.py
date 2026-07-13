@@ -276,7 +276,13 @@ def parse_payload(row: dict[str, str]) -> dict[str, str]:
         new_status_name = payload.get("new_status_name") or row.get("new_status_name", "")
         if not new_status_name:
             raise ValueError("new_status_name is required")
-        return {"action": "change_status", "target_issue_key": issue_key, "new_status_name": new_status_name}
+        comment = payload.get("comment_body") or row.get("comment_body", "")
+        return {
+            "action": "change_status",
+            "target_issue_key": issue_key,
+            "new_status_name": new_status_name,
+            "comment_body": comment,
+        }
 
     if operation_type == "change_priority":
         new_priority_name = payload.get("new_priority_name") or row.get("new_priority_name", "")
@@ -312,7 +318,7 @@ def add_comment(s: Settings, issue_key: str, comment: str) -> dict[str, Any]:
             params={"apiKey": s.backlog_api_key},
             data={"content": comment},
         )
-        res.raise_for_status()
+        raise_for_backlog_status(res, s.backlog_api_key)
         return res.json()
 
 
@@ -348,19 +354,23 @@ def create_issue(s: Settings, payload: dict[str, str]) -> dict[str, Any]:
             params={"apiKey": s.backlog_api_key},
             data=data,
         )
-        res.raise_for_status()
+        raise_for_backlog_status(res, s.backlog_api_key)
         return res.json()
 
 
 
-def change_status(s: Settings, issue_key: str, status_id: str) -> dict[str, Any]:
+def change_status(s: Settings, issue_key: str, status_id: str, comment: str = "") -> dict[str, Any]:
+    data = {"statusId": status_id}
+    if comment.strip():
+        data["comment"] = comment.strip()
+
     with httpx.Client(base_url=s.backlog_base_url.rstrip("/"), timeout=s.timeout_seconds) as client:
         res = client.patch(
             f"/api/v2/issues/{issue_key}",
             params={"apiKey": s.backlog_api_key},
-            data={"statusId": status_id},
+            data=data,
         )
-        res.raise_for_status()
+        raise_for_backlog_status(res, s.backlog_api_key)
         return res.json()
 
 def change_priority(s: Settings, issue_key: str, priority_id: str) -> dict[str, Any]:
@@ -370,7 +380,7 @@ def change_priority(s: Settings, issue_key: str, priority_id: str) -> dict[str, 
             params={"apiKey": s.backlog_api_key},
             data={"priorityId": priority_id},
         )
-        res.raise_for_status()
+        raise_for_backlog_status(res, s.backlog_api_key)
         return res.json()
 
 
@@ -381,7 +391,7 @@ def change_assignee(s: Settings, issue_key: str, assignee_id: str) -> dict[str, 
             params={"apiKey": s.backlog_api_key},
             data={"assigneeId": assignee_id},
         )
-        res.raise_for_status()
+        raise_for_backlog_status(res, s.backlog_api_key)
         return res.json()
 
 
@@ -395,8 +405,20 @@ def change_due_date(s: Settings, issue_key: str, due_date: str) -> dict[str, Any
                 "comment": f"IWTECH_SYSOP sync: due date changed to {due_date}",
             },
         )
-        res.raise_for_status()
+        raise_for_backlog_status(res, s.backlog_api_key)
         return res.json()
+
+
+def raise_for_backlog_status(res: httpx.Response, api_key: str) -> None:
+    try:
+        res.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        detail = res.text.strip()
+        if detail:
+            message = f"{exc} Response body: {detail}"
+        else:
+            message = str(exc)
+        raise RuntimeError(sanitize_error(message, api_key)) from exc
 
 def sanitize_error(message: str, api_key: str) -> str:
     sanitized = message
@@ -442,6 +464,20 @@ def main() -> None:
                         update_cells(service, s, row_no, [
                             "validated", str(retry), "", "",
                             f"dry_run: create_issue validated: {payload['issue_title']}",
+                            "", s.worker_name,
+                        ])
+                elif payload["action"] == "change_status":
+                    status_id = status_mapping.get((row.get("project_key", ""), payload["new_status_name"]))
+                    if not status_id:
+                        update_cells(service, s, row_no, [
+                            "on_hold", str(retry), "STATUS_MAPPING_NOT_FOUND",
+                            f"status_mapping not found: {row.get('project_key', '')} / {payload['new_status_name']}",
+                            "", "", s.worker_name,
+                        ])
+                    else:
+                        update_cells(service, s, row_no, [
+                            "validated", str(retry), "", "",
+                            f"dry_run: change_status validated: {payload['new_status_name']} ({status_id})",
                             "", s.worker_name,
                         ])
                 elif payload["action"] == "change_priority":
@@ -506,7 +542,12 @@ def main() -> None:
                         "", "", s.worker_name,
                     ])
                 else:
-                    response = change_status(s, payload["target_issue_key"], status_id)
+                    response = change_status(
+                        s,
+                        payload["target_issue_key"],
+                        status_id,
+                        payload.get("comment_body", ""),
+                    )
                     update_cells(service, s, row_no, [
                         "succeeded", str(retry), "", "",
                         f"status changed: {payload['new_status_name']} ({status_id})",
@@ -559,3 +600,13 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
+
+
