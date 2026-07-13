@@ -390,7 +390,10 @@ def change_due_date(s: Settings, issue_key: str, due_date: str) -> dict[str, Any
         res = client.patch(
             f"/api/v2/issues/{issue_key}",
             params={"apiKey": s.backlog_api_key},
-            data={"dueDate": due_date},
+            data={
+                "dueDate": due_date,
+                "comment": f"IWTECH_SYSOP sync: due date changed to {due_date}",
+            },
         )
         res.raise_for_status()
         return res.json()
