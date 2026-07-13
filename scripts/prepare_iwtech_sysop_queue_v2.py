@@ -17,7 +17,7 @@ SYNC_ISSUE_MAP_HEADERS = [
     "source_project_key", "source_issue_key", "source_issue_id", "source_issue_url",
     "target_project_key", "target_issue_key", "target_issue_id", "target_issue_url",
     "source_updated_at", "last_issue_synced_at", "sync_status", "create_queue_id",
-    "last_error_code", "last_error_message", "note",
+    "last_error_code", "last_error_message", "note", "last_comment_synced_at",
 ]
 
 
