@@ -135,7 +135,7 @@ If near-real-time syncing is needed later, add a second scheduled task at anothe
 
 - `config\backlog-sync-env.ps1` stays local and must not be committed.
 - Keep OAuth tokens and Backlog API keys outside the repository when possible.
-- The combined runner skips the write queue processor in dry-run mode.
+- The combined runner skips the write queue processor and cursor reconciliation in dry-run mode.
 - `write_queue_v2` processes `status=queued`.
 - v2 must keep `request_payload_json`, `idempotency_key`, `status`, and `retry_count`.
 - The scheduled task runs as the current Windows user because Google OAuth token access is user-scoped.
