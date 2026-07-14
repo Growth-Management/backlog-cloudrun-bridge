@@ -18,6 +18,8 @@ $env:WORKER_NAME = "backlog-sync-worker-v2"
 
 if ($DryRun) {
     $env:WRITE_QUEUE_DRY_RUN = "true"
+} else {
+    $env:WRITE_QUEUE_DRY_RUN = "false"
 }
 
 $PythonExe = Join-Path $RepoRoot ".venv-sync\Scripts\python.exe"
@@ -37,10 +39,15 @@ $LogFile = Join-Path $LogDir "write_queue_v2-$Timestamp.log"
 
 Push-Location $RepoRoot
 try {
-    & $PythonExe -m scripts.process_write_queue_v2 *>&1 | Tee-Object -FilePath $LogFile
+    "started_at=$(Get-Date -Format o)" | Tee-Object -FilePath $LogFile
+    "dry_run=$env:WRITE_QUEUE_DRY_RUN" | Tee-Object -FilePath $LogFile -Append
+
+    & $PythonExe -m scripts.process_write_queue_v2 *>&1 | Tee-Object -FilePath $LogFile -Append
     if ($LASTEXITCODE -ne 0) {
         throw "write_queue_v2 processor failed with exit code $LASTEXITCODE. See $LogFile"
     }
+
+    "finished_at=$(Get-Date -Format o)" | Tee-Object -FilePath $LogFile -Append
 } finally {
     Pop-Location
 }
