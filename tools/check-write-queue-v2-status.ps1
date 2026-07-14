@@ -14,6 +14,12 @@ if (-not (Test-Path $PythonExe)) {
 
 . $EnvFile
 $env:WRITE_QUEUE_SHEET_NAME = "write_queue_v2"
+$env:CHECK_ALLOWED_ATTENTION_QUEUE_IDS = @(
+    "WQV2-20260703-001",
+    "WQV2-20260708-PRIORITY-DRYRUN-001",
+    "WQV2-IWTECH-STATUS-20260713-060104-013-de4714",
+    "WQV2-IWTECH-STATUS-20260713-060106-020-21c583"
+) -join ","
 
 Push-Location $Root
 try {
