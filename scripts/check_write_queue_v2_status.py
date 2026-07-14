@@ -21,6 +21,7 @@ class Settings:
     queue_sheet_name: str
     details_limit: int
     fail_on_attention: bool
+    allowed_attention_queue_ids: set[str]
 
 
 def require_env(name: str) -> str:
@@ -31,6 +32,11 @@ def require_env(name: str) -> str:
 
 
 def settings() -> Settings:
+    allowed_attention_queue_ids = {
+        value.strip()
+        for value in os.getenv("CHECK_ALLOWED_ATTENTION_QUEUE_IDS", "").split(",")
+        if value.strip()
+    }
     return Settings(
         spreadsheet_id=require_env("GOOGLE_SHEETS_SPREADSHEET_ID"),
         google_auth_mode=os.getenv("GOOGLE_AUTH_MODE", "user_oauth"),
@@ -40,6 +46,7 @@ def settings() -> Settings:
         queue_sheet_name=os.getenv("WRITE_QUEUE_SHEET_NAME", "write_queue_v2"),
         details_limit=int(os.getenv("CHECK_DETAILS_LIMIT", "20")),
         fail_on_attention=os.getenv("CHECK_FAIL_ON_ATTENTION", "false").lower() == "true",
+        allowed_attention_queue_ids=allowed_attention_queue_ids,
     )
 
 
@@ -77,11 +84,12 @@ def main() -> None:
     status_counts = Counter(row.get("status", "") for _, row in rows)
     operation_counts = Counter(row.get("operation_type", "") for _, row in rows)
     attention = []
+    ignored_attention = []
     for row_no, row in rows:
         status = row.get("status", "")
         if status not in ATTENTION_STATUSES:
             continue
-        attention.append({
+        item = {
             "row_no": row_no,
             "queue_id": row.get("queue_id", ""),
             "operation_type": row.get("operation_type", ""),
@@ -91,7 +99,11 @@ def main() -> None:
             "last_error_code": row.get("last_error_code", ""),
             "last_error_message": row.get("last_error_message", ""),
             "result_summary": row.get("result_summary", ""),
-        })
+        }
+        if item["queue_id"] in s.allowed_attention_queue_ids:
+            ignored_attention.append(item)
+        else:
+            attention.append(item)
 
     output = {
         "status": "attention_required" if attention else "ok",
@@ -100,6 +112,8 @@ def main() -> None:
         "operation_counts": dict(operation_counts),
         "attention_count": len(attention),
         "attention_rows": attention[:s.details_limit],
+        "ignored_attention_count": len(ignored_attention),
+        "ignored_attention_rows": ignored_attention[:s.details_limit],
     }
     print(json.dumps(output, ensure_ascii=False))
     if attention and s.fail_on_attention:
