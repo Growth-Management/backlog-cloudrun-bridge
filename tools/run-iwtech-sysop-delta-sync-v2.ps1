@@ -24,6 +24,12 @@ New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $env:WRITE_QUEUE_SHEET_NAME = "write_queue_v2"
 $env:WORKER_NAME = "backlog-sync-worker-v2"
 $env:WRITE_QUEUE_MAX_ROWS = [string]$WriteQueueMaxRows
+$env:CHECK_ALLOWED_ATTENTION_QUEUE_IDS = @(
+    "WQV2-20260703-001",
+    "WQV2-20260708-PRIORITY-DRYRUN-001",
+    "WQV2-IWTECH-STATUS-20260713-060104-013-de4714",
+    "WQV2-IWTECH-STATUS-20260713-060106-020-21c583"
+) -join ","
 
 if ($DryRun) {
     $env:SYNC_DRY_RUN = "true"
