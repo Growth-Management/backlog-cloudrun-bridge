@@ -77,7 +77,7 @@ try {
         "step=write_queue_processor skipped_for_dry_run=true" | Tee-Object -FilePath $LogFile -Append
     }
     else {
-        Invoke-Step "write_queue_processor" "scripts.process_write_queue_v2"
+        Invoke-Step "write_queue_processor" "scripts.process_write_queue_v2_noop_status"
     }
     if ($DryRun) {
         "step=cursor_reconcile skipped_for_dry_run=true" | Tee-Object -FilePath $LogFile -Append
