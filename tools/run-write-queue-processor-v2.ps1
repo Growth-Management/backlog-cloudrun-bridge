@@ -42,7 +42,7 @@ try {
     "started_at=$(Get-Date -Format o)" | Tee-Object -FilePath $LogFile
     "dry_run=$env:WRITE_QUEUE_DRY_RUN" | Tee-Object -FilePath $LogFile -Append
 
-    & $PythonExe -m scripts.process_write_queue_v2 *>&1 | Tee-Object -FilePath $LogFile -Append
+    & $PythonExe -m scripts.process_write_queue_v2_noop_status *>&1 | Tee-Object -FilePath $LogFile -Append
     if ($LASTEXITCODE -ne 0) {
         throw "write_queue_v2 processor failed with exit code $LASTEXITCODE. See $LogFile"
     }
