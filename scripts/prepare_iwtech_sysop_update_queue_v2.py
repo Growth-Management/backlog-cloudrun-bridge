@@ -118,9 +118,19 @@ def backlog_get(s: Settings, path: str, params: dict[str, Any] | None = None) ->
 
 
 def source_issue(s: Settings, source_issue_key: str) -> dict[str, Any]:
-    issue = backlog_get(s, f"/api/v2/issues/{source_issue_key}")
+    issue = backlog_issue(s, source_issue_key)
+    return issue
+
+
+def target_issue(s: Settings, target_issue_key: str) -> dict[str, Any]:
+    issue = backlog_issue(s, target_issue_key)
+    return issue
+
+
+def backlog_issue(s: Settings, issue_key: str) -> dict[str, Any]:
+    issue = backlog_get(s, f"/api/v2/issues/{issue_key}")
     if not isinstance(issue, dict):
-        raise RuntimeError(f"Backlog issue response was not an object: {source_issue_key}")
+        raise RuntimeError(f"Backlog issue response was not an object: {issue_key}")
     return issue
 
 
@@ -332,6 +342,12 @@ def main() -> None:
                 elif idempotency_key in idempotency_keys:
                     skipped += 1
                 else:
+                    target = target_issue(s, target_issue_key)
+                    target_status_name = nested_name(target, "status")
+                    if target_status_name == status_name:
+                        skipped += 1
+                        continue
+
                     sequence += 1
                     row = build_status_row(s, map_row, issue, sequence)
                     if row is None:
