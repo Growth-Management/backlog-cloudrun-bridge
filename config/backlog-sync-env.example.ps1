@@ -32,9 +32,13 @@ $env:SOURCE_PROJECT_KEY = "IWTECH_SYSOP"
 $env:TARGET_PROJECT_KEY = "ICESAO_GENTASK"
 $env:SYNC_CONFIG_SHEET_NAME = "sync_config"
 $env:SYNC_ISSUE_MAP_SHEET_NAME = "sync_issue_map"
-$env:SYNC_MAX_ISSUES = "20"
+# 0 means no source-side cap. The delta runner sets this to 0 and separately
+# limits Backlog writes with WRITE_QUEUE_MAX_ROWS.
+$env:SYNC_MAX_ISSUES = "0"
+$env:SOURCE_COMPLETED_STATUS_NAMES = "完了"
 $env:SYNC_REQUESTED_BY = "iwtech-sysop-sync"
 # Optional: set comma-separated issue keys to limit a test run.
+# Completed issues are excluded even when explicitly listed.
 # $env:SOURCE_ISSUE_KEYS = "IWTECH_SYSOP-1"
 
 $env:BACKLOG_TIMEOUT_SECONDS = "20"

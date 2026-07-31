@@ -24,6 +24,14 @@ New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $env:WRITE_QUEUE_SHEET_NAME = "write_queue_v2"
 $env:WORKER_NAME = "backlog-sync-worker-v2"
 $env:WRITE_QUEUE_MAX_ROWS = [string]$WriteQueueMaxRows
+# Queue every newly discovered source issue except completed issues. The processor
+# still applies WriteQueueMaxRows, so Backlog writes remain batch-limited.
+$env:SYNC_MAX_ISSUES = "0"
+if (-not $env:SOURCE_COMPLETED_STATUS_NAMES) {
+    # Build the Japanese status name from Unicode code points so this script stays
+    # compatible with Windows PowerShell 5.1 when checked out as UTF-8 without BOM.
+    $env:SOURCE_COMPLETED_STATUS_NAMES = ([char]0x5B8C).ToString() + ([char]0x4E86).ToString()
+}
 $env:CHECK_ALLOWED_ATTENTION_QUEUE_IDS = @(
     "WQV2-20260703-001",
     "WQV2-20260708-PRIORITY-DRYRUN-001",
@@ -70,7 +78,9 @@ try {
     "started_at=$(Get-Date -Format o)" | Tee-Object -FilePath $LogFile
     "dry_run=$DryRun" | Tee-Object -FilePath $LogFile -Append
     "write_queue_max_rows=$env:WRITE_QUEUE_MAX_ROWS" | Tee-Object -FilePath $LogFile -Append
+    "source_completed_status_names=$env:SOURCE_COMPLETED_STATUS_NAMES" | Tee-Object -FilePath $LogFile -Append
 
+    Invoke-Step "create_prequeue" "scripts.prepare_iwtech_sysop_non_completed_queue_v2"
     Invoke-Step "comment_prequeue" "scripts.prepare_iwtech_sysop_comment_queue_v2"
     Invoke-Step "update_prequeue" "scripts.prepare_iwtech_sysop_update_queue_v2"
     if ($DryRun) {

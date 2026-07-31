@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import json
 import os
+import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -12,6 +14,7 @@ from scripts.process_write_queue_v2 import HEADERS
 
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 SOURCE_DRIVEN_OPERATIONS = {"change_status", "change_due_date"}
+CREATE_RESULT_PATTERN = re.compile(r"issue created: issueKey=(\S+) id=(\S+)")
 
 
 @dataclass(frozen=True)
@@ -122,6 +125,28 @@ def parse_payload(row: dict[str, str]) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def successful_create_results(queue_rows: list[tuple[int, dict[str, str]]]) -> dict[str, dict[str, str]]:
+    results: dict[str, dict[str, str]] = {}
+    for _, row in queue_rows:
+        if row.get("status") != "succeeded" or row.get("operation_type") != "create_issue":
+            continue
+        queue_id = str(row.get("queue_id") or "").strip()
+        if not queue_id:
+            continue
+        match = CREATE_RESULT_PATTERN.search(str(row.get("result_summary") or ""))
+        if not match:
+            continue
+        target_issue_key, target_issue_id = match.groups()
+        payload = parse_payload(row)
+        results[queue_id] = {
+            "source_issue_key": str(payload.get("source_issue_key") or "").strip(),
+            "target_issue_key": target_issue_key,
+            "target_issue_id": target_issue_id,
+            "processed_at": str(row.get("processed_at") or "").strip(),
+        }
+    return results
+
+
 def successful_cursor_sources(queue_rows: list[tuple[int, dict[str, str]]]) -> tuple[dict[str, str], dict[str, str], set[str]]:
     comment_cursors: dict[str, str] = {}
     issue_cursors: dict[str, str] = {}
@@ -192,6 +217,7 @@ def main() -> None:
     ensure_sync_map_headers(service, s)
 
     queue_rows = read_rows(service, s, s.queue_sheet_name, HEADERS)
+    create_results = successful_create_results(queue_rows)
     comment_cursors, issue_cursors, issue_cursor_sources_missing_payload = successful_cursor_sources(queue_rows)
 
     for source_issue_key in sorted(issue_cursor_sources_missing_payload):
@@ -200,38 +226,78 @@ def main() -> None:
             issue_cursors[source_issue_key] = updated
 
     updated = 0
+    create_reconciled = 0
+    cursor_reconciled = 0
     dry_run_events = []
+    now = datetime.now(UTC).isoformat()
+
     for row_no, row in read_rows(service, s, s.sync_issue_map_sheet_name, SYNC_ISSUE_MAP_HEADERS):
-        if not eligible_map_row(s, row):
-            continue
-
-        source_issue_key = row.get("source_issue_key", "")
         updates: dict[str, str] = {}
-        comment_cursor = comment_cursors.get(source_issue_key, "")
-        issue_cursor = issue_cursors.get(source_issue_key, "")
+        create_queue_id = str(row.get("create_queue_id") or "").strip()
+        create_result = create_results.get(create_queue_id)
 
-        if comment_cursor and comment_cursor > row.get("last_comment_synced_at", ""):
-            updates["last_comment_synced_at"] = comment_cursor
-        if issue_cursor and issue_cursor > row.get("last_issue_synced_at", ""):
-            updates["source_updated_at"] = issue_cursor
-            updates["last_issue_synced_at"] = issue_cursor
+        if row.get("sync_status") == "queued_create" and create_result:
+            source_issue_key = str(row.get("source_issue_key") or "").strip()
+            result_source_issue_key = create_result.get("source_issue_key", "")
+            if result_source_issue_key and source_issue_key != result_source_issue_key:
+                updates.update({
+                    "last_error_code": "CREATE_SOURCE_MISMATCH",
+                    "last_error_message": f"queue source {result_source_issue_key} does not match map source {source_issue_key}",
+                    "note": "create result reconciliation blocked",
+                })
+            else:
+                target_issue_key = create_result["target_issue_key"]
+                processed_at = create_result.get("processed_at") or now
+                updates.update({
+                    "target_issue_key": target_issue_key,
+                    "target_issue_id": create_result["target_issue_id"],
+                    "target_issue_url": f"{s.backlog_base_url.rstrip('/')}/view/{target_issue_key}",
+                    "last_issue_synced_at": processed_at,
+                    "sync_status": "created",
+                    "last_error_code": "",
+                    "last_error_message": "",
+                    "note": "create_issue result reconciled",
+                })
+                create_reconciled += 1
+
+        effective_row = dict(row)
+        effective_row.update(updates)
+        if eligible_map_row(s, effective_row):
+            source_issue_key = effective_row.get("source_issue_key", "")
+            comment_cursor = comment_cursors.get(source_issue_key, "")
+            issue_cursor = issue_cursors.get(source_issue_key, "")
+
+            if comment_cursor and comment_cursor > effective_row.get("last_comment_synced_at", ""):
+                updates["last_comment_synced_at"] = comment_cursor
+            if issue_cursor and issue_cursor > effective_row.get("last_issue_synced_at", ""):
+                updates["source_updated_at"] = issue_cursor
+                updates["last_issue_synced_at"] = issue_cursor
+
+            if comment_cursor or issue_cursor:
+                updates.update({
+                    "last_error_code": "",
+                    "last_error_message": "",
+                    "note": "sync cursors reconciled",
+                })
+                cursor_reconciled += 1
 
         if not updates:
             continue
 
-        updates.update({
-            "last_error_code": "",
-            "last_error_message": "",
-            "note": "sync cursors reconciled",
-        })
-
         if s.dry_run:
-            dry_run_events.append({"row_no": row_no, "source_issue_key": source_issue_key, "updates": updates})
+            dry_run_events.append({"row_no": row_no, "source_issue_key": row.get("source_issue_key", ""), "updates": updates})
         else:
             update_sync_map_row(service, s, row_no, row, updates)
         updated += 1
 
-    print(json.dumps({"status": "ok", "updated": updated, "dry_run": s.dry_run, "events": dry_run_events}, ensure_ascii=False))
+    print(json.dumps({
+        "status": "ok",
+        "updated": updated,
+        "create_reconciled": create_reconciled,
+        "cursor_reconciled": cursor_reconciled,
+        "dry_run": s.dry_run,
+        "events": dry_run_events,
+    }, ensure_ascii=False))
 
 
 if __name__ == "__main__":
