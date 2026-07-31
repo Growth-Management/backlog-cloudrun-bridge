@@ -14,3 +14,10 @@ google-oauth-token.json
 *client-secret*.json
 *service-account*.json
 .env
+
+# Local backup and verification copies
+scripts/*.bak-*
+scripts/*.dryrun-test
+scripts/*.mapping-test
+scripts/*.priority-real-test
+scripts/*.assignee-real-test
