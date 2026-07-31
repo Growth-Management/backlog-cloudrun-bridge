@@ -1,0 +1,23 @@
+# Local environment files and credentials
+config/backlog-sync-env.ps1
+*.log
+logs/
+output/
+.venv/
+.venv-sync/
+__pycache__/
+*.pyc
+
+# Google and Backlog secrets
+google-oauth-token.json
+*oauth-token*.json
+*client-secret*.json
+*service-account*.json
+.env
+
+# Local backup and verification copies
+scripts/*.bak-*
+scripts/*.dryrun-test
+scripts/*.mapping-test
+scripts/*.priority-real-test
+scripts/*.assignee-real-test

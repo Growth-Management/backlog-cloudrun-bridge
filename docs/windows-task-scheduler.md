@@ -1,130 +1,141 @@
-# Windows Task Scheduler setup
+# Windows Task Scheduler Setup
 
-Backlog の許可IP内PCで `issues_snapshot` 同期と `write_queue` 反映を定期実行するための手順です。
+Backlog allowed-IP resident PC tasks for `C:\backlog-sync`.
 
-## ファイル構成
+## Files
 
 ```text
-scripts/windows/
+config/
   backlog-sync-env.example.ps1
-  backlog-sync-env.ps1        # ローカル作成。秘密情報を含むためコミットしない
+  backlog-sync-env.ps1        # local only, contains secrets
+tools/
   run-issues-snapshot-sync.ps1
   run-write-queue-processor.ps1
+  run-write-queue-processor-v2.ps1
+  run-iwtech-sysop-delta-sync-v2.ps1
+  register-iwtech-sysop-delta-sync-task.ps1
+  unregister-iwtech-sysop-delta-sync-task.ps1
+  check-write-queue-v2-status.ps1
+  check-sync-issue-map-v2.ps1
 ```
 
-## 1. ローカル環境設定ファイルを作成
-
-リポジトリ直下で実行します。
+## Setup
 
 ```powershell
-Copy-Item .\scripts\windows\backlog-sync-env.example.ps1 .\scripts\windows\backlog-sync-env.ps1
-notepad .\scripts\windows\backlog-sync-env.ps1
+$RepoRoot = "C:\backlog-sync"
+Copy-Item "$RepoRoot\config\backlog-sync-env.example.ps1" "$RepoRoot\config\backlog-sync-env.ps1"
+notepad "$RepoRoot\config\backlog-sync-env.ps1"
 ```
 
-最低限、次の値を実環境に合わせます。
+Set real values for:
 
 ```powershell
 $env:BACKLOG_API_KEY = "Backlog API key"
 $env:GOOGLE_OAUTH_CLIENT_SECRET_FILE = "C:\secure\google-oauth-client-secret.json"
 $env:GOOGLE_OAUTH_TOKEN_FILE = "C:\secure\google-oauth-token.json"
-$env:BACKLOG_SYNC_LOG_DIR = "C:\Users\sinohara\backlog-cloudrun-bridge\logs"
+$env:TARGET_PROJECT_ID = "ICESAO_GENTASK project id"
+$env:BACKLOG_DEFAULT_ISSUE_TYPE_ID = "default issue type id"
+$env:BACKLOG_DEFAULT_PRIORITY_ID = "3"
+$env:BACKLOG_DEFAULT_ASSIGNEE_ID = "115000"
 ```
 
-対象スプレッドシートは次のIDを既定値にしています。
+## Manual Verification
+
+Run these before registering the scheduled task:
+
+```powershell
+cd C:\backlog-sync
+.\tools\check-write-queue-v2-status.ps1
+.\tools\check-sync-issue-map-v2.ps1
+.\tools\run-iwtech-sysop-delta-sync-v2.ps1 -DryRun
+```
+
+If the dry-run output is safe, run one real delta pass manually:
+
+```powershell
+.\tools\run-iwtech-sysop-delta-sync-v2.ps1 -WriteQueueMaxRows 5
+```
+
+Increase `-WriteQueueMaxRows` after confirming the first scheduled run behavior.
+
+## Register IWTECH_SYSOP Delta Sync
+
+The registration script creates this task:
+
+- Task path: `\BacklogSync\`
+- Task name: `Backlog IWTECH_SYSOP Delta Sync v2`
+- Action: `tools\run-iwtech-sysop-delta-sync-v2.ps1`
+- Principal: current Windows user, interactive logon
+- Multiple instances: ignore new runs while one is still running
+- Execution time limit: 2 hours
+
+Register a daily task:
+
+```powershell
+cd C:\backlog-sync
+.\tools\register-iwtech-sysop-delta-sync-task.ps1 -DailyAt 08:30 -WriteQueueMaxRows 20
+```
+
+Replace an existing task:
+
+```powershell
+.\tools\register-iwtech-sysop-delta-sync-task.ps1 -DailyAt 08:30 -WriteQueueMaxRows 20 -Force
+```
+
+Register and start immediately:
+
+```powershell
+.\tools\register-iwtech-sysop-delta-sync-task.ps1 -DailyAt 08:30 -WriteQueueMaxRows 20 -Force -RunNow
+```
+
+Unregister:
+
+```powershell
+.\tools\unregister-iwtech-sysop-delta-sync-task.ps1
+```
+
+## Verify Scheduled Task
+
+```powershell
+Get-ScheduledTask -TaskPath "\BacklogSync\" -TaskName "Backlog IWTECH_SYSOP Delta Sync v2"
+Get-ScheduledTaskInfo -TaskPath "\BacklogSync\" -TaskName "Backlog IWTECH_SYSOP Delta Sync v2"
+```
+
+Start manually from Task Scheduler:
+
+```powershell
+Start-ScheduledTask -TaskPath "\BacklogSync\" -TaskName "Backlog IWTECH_SYSOP Delta Sync v2"
+```
+
+## Logs
+
+```powershell
+Get-ChildItem C:\backlog-sync\logs | Sort-Object LastWriteTime -Descending | Select-Object -First 10
+Get-Content C:\backlog-sync\logs\iwtech-sysop-delta-sync-v2-*.log -Tail 80
+```
+
+A healthy delta run ends with both checks:
 
 ```text
-1muUdmTqJYQV9FOzoCR1lkM-ie9QWfYjQYf__6YF_Hlo
+"status": "ok"
+"warning_count": 0
 ```
 
-## 2. 手動確認
+## Suggested Operating Rhythm
 
-タスク登録前に、PowerShell から手動実行します。
+Initial production rhythm:
 
-```powershell
-.\scripts\windows\run-issues-snapshot-sync.ps1
-.\scripts\windows\run-write-queue-processor.ps1 -DryRun
-```
+- Daily IWTECH_SYSOP delta sync at 08:30
+- Manual `check-write-queue-v2-status.ps1` after the first few scheduled runs
+- Increase `WriteQueueMaxRows` only after queue volume and run time are stable
 
-実反映を有効にする場合は、`backlog-sync-env.ps1` で次の値にします。
+If near-real-time syncing is needed later, add a second scheduled task at another time or move to a repeated trigger after confirming API and Sheets quota behavior.
 
-```powershell
-$env:WRITE_QUEUE_DRY_RUN = "false"
-```
+## Safety Notes
 
-そのうえで実行します。
-
-```powershell
-.\scripts\windows\run-write-queue-processor.ps1
-```
-
-## 3. タスクスケジューラへ登録
-
-初期推奨は次の頻度です。
-
-- `issues_snapshot`: 30分ごと
-- `write_queue`: 5分ごと
-
-PowerShell を管理者として開き、必要に応じてパスを実PCのリポジトリ場所に合わせて実行します。
-
-```powershell
-$RepoRoot = "C:\Users\sinohara\backlog-cloudrun-bridge"
-$PowerShell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-
-schtasks /Create /F /SC MINUTE /MO 30 /TN "Backlog Issues Snapshot Sync" /TR "`"$PowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$RepoRoot\scripts\windows\run-issues-snapshot-sync.ps1`" -RepoRoot `"$RepoRoot`"" /ST 09:00
-
-schtasks /Create /F /SC MINUTE /MO 5 /TN "Backlog Write Queue Processor" /TR "`"$PowerShell`" -NoProfile -ExecutionPolicy Bypass -File `"$RepoRoot\scripts\windows\run-write-queue-processor.ps1`" -RepoRoot `"$RepoRoot`"" /ST 09:00
-```
-
-## 4. 登録後の確認
-
-登録済みタスクを確認します。
-
-```powershell
-schtasks /Query /TN "Backlog Issues Snapshot Sync" /V /FO LIST
-schtasks /Query /TN "Backlog Write Queue Processor" /V /FO LIST
-```
-
-手動で即時実行します。
-
-```powershell
-schtasks /Run /TN "Backlog Issues Snapshot Sync"
-schtasks /Run /TN "Backlog Write Queue Processor"
-```
-
-ログは `BACKLOG_SYNC_LOG_DIR` に出力されます。
-
-```powershell
-Get-ChildItem C:\Users\sinohara\backlog-cloudrun-bridge\logs | Sort-Object LastWriteTime -Descending | Select-Object -First 10
-Get-Content C:\Users\sinohara\backlog-cloudrun-bridge\logs\write_queue-*.log -Tail 20
-```
-
-## 5. 停止・削除
-
-一時停止する場合:
-
-```powershell
-schtasks /Change /TN "Backlog Issues Snapshot Sync" /DISABLE
-schtasks /Change /TN "Backlog Write Queue Processor" /DISABLE
-```
-
-再開する場合:
-
-```powershell
-schtasks /Change /TN "Backlog Issues Snapshot Sync" /ENABLE
-schtasks /Change /TN "Backlog Write Queue Processor" /ENABLE
-```
-
-削除する場合:
-
-```powershell
-schtasks /Delete /TN "Backlog Issues Snapshot Sync" /F
-schtasks /Delete /TN "Backlog Write Queue Processor" /F
-```
-
-## 運用メモ
-
-- `backlog-sync-env.ps1` には Backlog API key を含めるため、許可IP内PCだけに保存します。
-- Google OAuth token は `C:\secure` など、通常ユーザー以外が読めない場所へ置きます。
-- `write_queue` は `approval_status=approved` かつ `execution_status=queued` の行だけ処理します。
-- 失敗時は `execution_status=failed`、`validation_error`、`retry_count` を確認します。
-- 大量反映を避けるため、初期値では `WRITE_QUEUE_MAX_ROWS=20` にしています。
+- `config\backlog-sync-env.ps1` stays local and must not be committed.
+- Keep OAuth tokens and Backlog API keys outside the repository when possible.
+- The combined runner skips the write queue processor and cursor reconciliation in dry-run mode.
+- `write_queue_v2` processes `status=queued`.
+- v2 must keep `request_payload_json`, `idempotency_key`, `status`, and `retry_count`.
+- The scheduled task runs as the current Windows user because Google OAuth token access is user-scoped.

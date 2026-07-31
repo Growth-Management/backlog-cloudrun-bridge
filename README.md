@@ -1,131 +1,146 @@
-# Backlog Cloud Run Bridge
+# backlog-sync-bridge
 
-Cloud Run 上で動作する Backlog 連携 API です。
+Backlog and Google Sheets sync tools for the resident Windows PC at `C:\backlog-sync` inside the Backlog allowed-IP network.
 
-## Local Run
+This repository is local-run first. It is not a Cloud Run service and does not expose a public API. Google Sheets is the handoff interface between operators, ChatGPT-assisted queue preparation, and the resident PC worker.
 
-```bash
-pip install -r requirements-dev.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
+## Local Directory Shape
+
+The resident PC layout is:
+
+```text
+C:\backlog-sync\
+  .venv-sync\
+  config\
+  logs\
+  output\
+  scripts\
+  tools\
+  assignee_mapping.tsv
+  priority_mapping.tsv
 ```
 
-## Health Check
+Repository-managed source should live in `scripts/`, `tools/`, `config/`, `docs/`, and root reference files. Runtime output stays local and is ignored.
 
-```bash
-curl http://localhost:8080/health
+## What This Syncs
+
+- Backlog issues -> Google Sheets `issues_snapshot`
+- Google Sheets legacy `write_queue` -> Backlog writeback
+- Google Sheets standard `write_queue_v2` -> Backlog writeback
+- `IWTECH_SYSOP` source issues -> `write_queue_v2` `create_issue` rows for `ICESAO_GENTASK`
+
+## Main Files
+
+```text
+scripts/
+  google_sheets_auth.py
+  sync_issues_snapshot.py
+  process_write_queue.py
+  process_write_queue_v2.py
+  prepare_iwtech_sysop_queue_v2.py
+  prepare_iwtech_sysop_comment_queue_v2.py
+  prepare_iwtech_sysop_update_queue_v2.py
+  reconcile_iwtech_sysop_sync_cursors_v2.py
+  check_write_queue_v2_status.py
+  check_sync_issue_map_v2.py
+tools/
+  run-issues-snapshot-sync.ps1
+  run-write-queue-processor.ps1
+  run-write-queue-processor-v2.ps1
+  run-iwtech-sysop-prequeue-v2.ps1
+  run-iwtech-sysop-comment-prequeue-v2.ps1
+  run-iwtech-sysop-update-prequeue-v2.ps1
+  run-reconcile-iwtech-sysop-cursors-v2.ps1
+  run-iwtech-sysop-delta-sync-v2.ps1
+  register-iwtech-sysop-delta-sync-task.ps1
+  unregister-iwtech-sysop-delta-sync-task.ps1
+  check-write-queue-v2-status.ps1
+  check-sync-issue-map-v2.ps1
+config/
+  backlog-sync-env.example.ps1
+docs/
+  issues-snapshot-sync.md
+  windows-task-scheduler.md
+  write-queue-v2.md
 ```
 
-## Auth Check
+## Local Setup
 
-Business API routes use Bearer authentication. `/health` remains public for
-Cloud Run availability checks.
-
-```bash
-export API_AUTH_TOKEN="change-me"
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
-curl -H "Authorization: Bearer change-me" http://localhost:8080/auth/check
+```powershell
+cd C:\backlog-sync
+python -m venv .venv-sync
+.\.venv-sync\Scripts\python.exe -m pip install -r requirements-sync.txt
+Copy-Item .\config\backlog-sync-env.example.ps1 .\config\backlog-sync-env.ps1
+notepad .\config\backlog-sync-env.ps1
 ```
 
-## Configuration
+Do not commit `config\backlog-sync-env.ps1`, OAuth tokens, API keys, Google client secrets, logs, or output files.
 
-The service reads configuration from environment variables. Secret values must
-be provided through Cloud Run environment variables or Secret Manager.
+## Manual Runs
 
-| Name | Default | Required |
-| --- | --- | --- |
-| `APP_ENV` | `local` | no |
-| `API_AUTH_TOKEN` | none | yes |
-| `BACKLOG_BASE_URL` | `https://ice.backlog.jp` | no |
-| `BACKLOG_API_KEY` | none | yes |
-| `BACKLOG_PROJECT_KEY` | `ICESAO_GENTASK` | no |
-| `BACKLOG_TIMEOUT_SECONDS` | `10` | no |
-
-Request logs are emitted as JSON and include `request_id`, HTTP method, path,
-status code, and duration. Secret values are not included in log output.
-
-## Operations
-
-Cloud Run deploys are managed by GitHub Actions. See
-[`docs/operations.md`](docs/operations.md) for CI, deploy, health check,
-Secret Manager, Artifact Registry, and rollback verification steps.
-
-Allowed-IP Windows PC sync tasks are documented in
-[`docs/windows-task-scheduler.md`](docs/windows-task-scheduler.md). They run
-Backlog -> Google Sheets `issues_snapshot` sync and Google Sheets `write_queue`
--> Backlog writeback on Windows Task Scheduler.
-
-## Backlog Client
-
-Backlog API access is isolated in `app/clients/backlog_client.py`. The client
-adds the Backlog API key to outbound requests, normalizes issue responses, and
-converts HTTP, timeout, or invalid response failures into `BacklogClientError`
-without exposing secret values.
-
-## Create Issue
-
-`POST /issues` creates a Backlog issue. This route requires Bearer
-authentication.
-
-```bash
-curl -X POST http://localhost:8080/issues \
-  -H "Authorization: Bearer change-me" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "summary": "Example issue",
-    "description": "Issue body",
-    "issue_type_id": 5,
-    "priority": "normal",
-    "assignee_id": 10
-  }'
+```powershell
+.\tools\run-issues-snapshot-sync.ps1
+.\tools\run-write-queue-processor.ps1 -DryRun
+.\tools\run-iwtech-sysop-prequeue-v2.ps1 -DryRun
+.\tools\run-write-queue-processor-v2.ps1 -DryRun
 ```
 
-Backlog requires numeric IDs for issue type, priority, and assignee values.
-The API accepts `priority` as `high`, `normal`, or `low` and converts it to a
-Backlog `priorityId`. Use `issue_type_id` directly, or provide
-`issue_type_name` so the API can resolve it from the configured Backlog project.
-Assignees must be sent as `assignee_id`; display names are not forwarded to
-Backlog.
+## IWTECH_SYSOP Delta Sync
 
-## Search and Get Issues
+Use the combined runner for normal delta operation after the initial create/comment/update sync has been reconciled.
 
-`GET /issues` searches Backlog issues in the configured project. This route
-requires Bearer authentication.
-
-```bash
-curl -H "Authorization: Bearer change-me" \
-  "http://localhost:8080/issues?keyword=Example&status_id=1&assignee_id=10"
+```powershell
+.\tools\run-iwtech-sysop-delta-sync-v2.ps1 -DryRun
+.\tools\run-iwtech-sysop-delta-sync-v2.ps1
 ```
 
-Use repeated query parameters to send multiple status or assignee IDs:
-`status_id=1&status_id=2`. The response contains a normalized issue list,
-`count`, and `offset`.
+The dry-run mode runs the pre-queue and check steps but skips the write queue processor and cursor reconciliation so existing rows and sync cursors are not changed by accident.
 
-`GET /issues/{issue_key}` returns details for a confirmed Backlog issue key:
+For a small controlled batch, set the worker limit:
 
-```bash
-curl -H "Authorization: Bearer change-me" \
-  http://localhost:8080/issues/ICESAO_GENTASK-1
+```powershell
+.\tools\run-iwtech-sysop-delta-sync-v2.ps1 -WriteQueueMaxRows 5
 ```
 
-## Update Issue
+## Windows Task Scheduler
 
-`PATCH /issues/{issue_key}` updates a confirmed Backlog issue key. This route
-requires Bearer authentication.
+Register the normal IWTECH_SYSOP delta sync as the current Windows user. The task runs only when that user is logged on, which keeps Google OAuth token access aligned with the resident PC setup.
 
-```bash
-curl -X PATCH http://localhost:8080/issues/ICESAO_GENTASK-1 \
-  -H "Authorization: Bearer change-me" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "summary": "Updated summary",
-    "status": "in_progress",
-    "priority": "normal",
-    "assignee_id": 10
-  }'
+```powershell
+.\tools\register-iwtech-sysop-delta-sync-task.ps1 -DailyAt 08:30 -WriteQueueMaxRows 20
 ```
 
-The API accepts direct `status_id` and `priority_id` values for environments
-with custom Backlog IDs. It also supports default name mappings:
-`open` -> `1`, `in_progress` -> `2`, `resolved` -> `3`, `closed` -> `4` and
-`high` -> `2`, `normal` -> `3`, `low` -> `4`. Assignees must be sent as
-`assignee_id`; display names are not forwarded to Backlog.
+Replace an existing task or start it immediately:
+
+```powershell
+.\tools\register-iwtech-sysop-delta-sync-task.ps1 -DailyAt 08:30 -WriteQueueMaxRows 20 -Force
+.\tools\register-iwtech-sysop-delta-sync-task.ps1 -DailyAt 08:30 -WriteQueueMaxRows 20 -Force -RunNow
+```
+
+Remove the task:
+
+```powershell
+.\tools\unregister-iwtech-sysop-delta-sync-task.ps1
+```
+
+## Daily Checks
+
+```powershell
+.\tools\check-write-queue-v2-status.ps1
+.\tools\check-sync-issue-map-v2.ps1
+```
+
+`check-write-queue-v2-status.ps1` reports `queued`, `processing`, `failed`, and `on_hold` rows that need attention. `check-sync-issue-map-v2.ps1` reports map inconsistencies such as duplicate source/target issue keys or created rows without a target issue key.
+
+## Operation Docs
+
+- `docs/issues-snapshot-sync.md`: Backlog issue snapshot sync and legacy write queue details
+- `docs/windows-task-scheduler.md`: Windows Task Scheduler registration and logs
+- `docs/write-queue-v2.md`: standard v2 queue columns, lifecycle, and IWTECH_SYSOP pre-queue scope
+
+## Safety Rules
+
+- Keep Backlog API keys and Google credentials only on the resident PC.
+- Keep legacy `write_queue` and standard `write_queue_v2` as separate flows while v2 is being verified.
+- Treat display names such as status, priority, and assignee names as input values that require mapping before Backlog API writes.
+- Use `request_payload_json`, `idempotency_key`, `status`, and `retry_count` in `write_queue_v2` as the minimum safety line.
