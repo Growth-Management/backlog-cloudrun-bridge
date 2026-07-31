@@ -1,0 +1,4 @@
+"project_key"	"priority_name"	"priority_id"	"is_active"	"note"	"last_checked_at"	"source"	"sort_order"
+"ICESAO_GENTASK"	"高"	"2"	"TRUE"	"Backlog API 読み取り確認済み"	"2026-07-07"	"Backlog /api/v2/priorities"	"1"
+"ICESAO_GENTASK"	"中"	"3"	"TRUE"	"Backlog API 読み取り確認済み"	"2026-07-07"	"Backlog /api/v2/priorities"	"2"
+"ICESAO_GENTASK"	"低"	"4"	"TRUE"	"Backlog API 読み取り確認済み"	"2026-07-07"	"Backlog /api/v2/priorities"	"3"
