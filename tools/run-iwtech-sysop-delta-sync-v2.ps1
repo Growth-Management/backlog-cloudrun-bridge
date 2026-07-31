@@ -28,7 +28,9 @@ $env:WRITE_QUEUE_MAX_ROWS = [string]$WriteQueueMaxRows
 # still applies WriteQueueMaxRows, so Backlog writes remain batch-limited.
 $env:SYNC_MAX_ISSUES = "0"
 if (-not $env:SOURCE_COMPLETED_STATUS_NAMES) {
-    $env:SOURCE_COMPLETED_STATUS_NAMES = "完了"
+    # Build the Japanese status name from Unicode code points so this script stays
+    # compatible with Windows PowerShell 5.1 when checked out as UTF-8 without BOM.
+    $env:SOURCE_COMPLETED_STATUS_NAMES = ([char]0x5B8C).ToString() + ([char]0x4E86).ToString()
 }
 $env:CHECK_ALLOWED_ATTENTION_QUEUE_IDS = @(
     "WQV2-20260703-001",
