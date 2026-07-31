@@ -1,0 +1,5 @@
+"project_key"	"assignee_name"	"assignee_id"	"backlog_user_id"	"is_active"	"note"	"last_checked_at"	"source"
+"ICESAO_GENTASK"	"山田 貴寛"	"115000"	""	"TRUE"	"Backlog API 読み取り確認済み"	"2026-07-07"	"Backlog /api/v2/projects/ICESAO_GENTASK/users"
+"ICESAO_GENTASK"	"篠原 邦昭"	"25111"	"sinohara"	"TRUE"	"Backlog API 読み取り確認済み"	"2026-07-07"	"Backlog /api/v2/projects/ICESAO_GENTASK/users"
+"ICESAO_GENTASK"	"谷内"	"674389"	""	"TRUE"	"Backlog API 読み取り確認済み"	"2026-07-07"	"Backlog /api/v2/projects/ICESAO_GENTASK/users"
+"ICESAO_GENTASK"	"金子 貴昭"	"18767"	""	"TRUE"	"Backlog API 読み取り確認済み"	"2026-07-07"	"Backlog /api/v2/projects/ICESAO_GENTASK/users"
