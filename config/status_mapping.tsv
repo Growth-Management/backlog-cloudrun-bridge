@@ -1,0 +1,5 @@
+"project_key"	"status_name"	"status_id"	"is_active"	"note"	"last_checked_at"	"source"	"sort_order"
+"ICESAO_GENTASK"	"未対応"	"1"	"TRUE"	"Backlog API 読み取り確認済み"	"2026-07-13"	"Backlog project statuses"	"1"
+"ICESAO_GENTASK"	"処理中"	"2"	"TRUE"	"Backlog API 読み取り確認済み"	"2026-07-13"	"Backlog project statuses"	"2"
+"ICESAO_GENTASK"	"処理済み"	"3"	"TRUE"	"Backlog API 読み取り確認済み"	"2026-07-13"	"Backlog project statuses"	"3"
+"ICESAO_GENTASK"	"完了"	"4"	"TRUE"	"Backlog API 読み取り確認済み"	"2026-07-13"	"Backlog project statuses"	"4"
